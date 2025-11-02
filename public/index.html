@@ -1953,6 +1953,35 @@ if (modal) window.i18n?.apply?.(modal);
         }
       }
     });
+
+    document.addEventListener('DOMContentLoaded', () => {
+    const title = document.querySelector('.title-section');
+    const container = document.querySelector('.container');
+    const firstCard = document.querySelector('.card-grid .card:first-child');
+
+    if (!title || !container || !firstCard) return;
+    const GAP = 8;
+
+    function placeTitle() {
+    const cont = container.getBoundingClientRect();
+    const card = firstCard.getBoundingClientRect();
+      title.style.visibility = 'hidden';
+      title.style.left = '0px';
+      title.style.top = '0px';
+      const titleH = title.offsetHeight;
+      const left = card.left - cont.left;
+      const top  = card.top  - cont.top  - titleH - GAP;
+
+      title.style.left = left + 'px';
+      title.style.top  = top  + 'px';
+      title.style.visibility = 'visible';
+    }
+
+    placeTitle();
+    window.addEventListener('resize', placeTitle, { passive: true });
+    window.addEventListener('scroll', placeTitle, { passive: true });
+    new ResizeObserver(placeTitle).observe(document.documentElement);
+  });
   </script>
 </body>
 </html>
