@@ -1,0 +1,29 @@
+services:
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: groovify:prod
+    pull_policy: never
+    container_name: Groovify
+    env_file: .env
+    environment:
+      - NODE_ENV=production
+      - PORT=${PORT:-5174}
+      - YT_FORCE_IPV4=1
+      - YT_APPLY_403_WORKAROUNDS=1
+      - YTDLP_EXTRA=--force-ipv4
+    ports:
+      - "${PORT:-5174}:${PORT:-5174}"
+    volumes:
+      - ./uploads:/usr/src/app/uploads
+      - ./outputs:/usr/src/app/outputs
+      - ./temp:/usr/src/app/temp
+      - ./cookies/cookies.txt:/usr/src/app/cookies/cookies.txt:ro
+      - ./.env:/usr/src/app/.env
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:${PORT:-5174}/ || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5

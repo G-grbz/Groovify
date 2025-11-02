@@ -1,0 +1,25 @@
+{
+  "watch": ["app.js", "public", "routes", "lib", "config"],
+  "ext": "js,json,html,css",
+  "ignore": [
+    "temp/**",
+    "uploads/**",
+    "outputs/**",
+    "**/*.mp3",
+    "**/*.mp4",
+    "**/*.webm",
+    "**/*.zip",
+    "**/*.mkv",
+    "**/*.m4a",
+    "**/*.opus",
+    "**/*.ogg",
+    "**/*.flac",
+    "**/*.wav",
+    "**/*.jpg",
+    "**/*.jpeg",
+    "**/*.png",
+    "**/*.webp",
+    "**/*.info.json",
+    "*.log"
+  ]
+}
