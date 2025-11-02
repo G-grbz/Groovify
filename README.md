@@ -94,52 +94,57 @@ PORT=5174
 
 ## Quick Start (Local – Node & npm)
 
-1. Install dependencies:
+1. Clone the repository and navigate to the project directory:
+
+   ```bash
+   git clone https://github.com/G-grbz/Groovify
+   cd Groovify
+   ```
+
+2. Create a `.env` file. (To manage environment settings via the UI, include `ADMIN_PASSWORD` and `APP_SECRET` fields. Generate `APP_SECRET` using the following command:)
+
+   ```bash
+   openssl rand -hex 32
+   ```
+
+3. Install the required dependencies:
 
    ```bash
    npm i express multer node-fetch spotify-web-api-node dotenv archiver && npm i -D nodemon
    ```
-2. Start the app:
+
+4. Start the application:
 
    ```bash
    npm start
    ```
-3. Open: [http://localhost:5174](http://localhost:5174)
+
+5. Open in your browser: [http://localhost:5174](http://localhost:5174)
 
 ---
 
 ## Quick Start (Docker Compose)
 
+1. Clone the repository and navigate to the project directory:
 
-```yaml
-services:
-  web:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    image: groovify:prod
-    container_name: Groovify
-    env_file: .env
-    environment:
-      - NODE_ENV=production
-      - PORT=5174
-      - YT_FORCE_IPV4=1
-      - YTDLP_EXTRA=--force-ipv4
-    ports:
-      - "5174:5174"
-    volumes:
-      - ./uploads:/usr/src/app/uploads
-      - ./outputs:/usr/src/app/outputs
-      - ./temp:/usr/src/app/temp
-      - ./cookies/cookies.txt:/usr/src/app/cookies/cookies.txt:ro
-    restart: unless-stopped
-```
+   ```bash
+   git clone https://github.com/G-grbz/Groovify
+   cd Groovify
+   ```
 
-Run:
+2. Create a `.env` file. (To manage environment settings via the UI, include `ADMIN_PASSWORD` and `APP_SECRET` fields. Generate `APP_SECRET` using the following command:)
 
-```bash
-docker compose up -d --build
-```
+   ```bash
+   openssl rand -hex 32
+   ```
+
+3. Run the application with Docker Compose:
+
+   ```bash
+   docker compose up -d --build
+   ```
+
+4. Open in your browser: [http://localhost:5174](http://localhost:5174)
 
 ---
 
@@ -250,51 +255,57 @@ PORT=5174
 
 ## Hızlı Başlangıç (Yerel – Node & npm)
 
-1. Gerekli bağımlılıkları yükleyin:
+1. Repoyu indirin ve dizine geçin:
+
+   ```bash
+   git clone https://github.com/G-grbz/Groovify
+   cd Groovify
+   ```
+
+2. `.env` dosyasını oluşturun. (UI üzerinden düzenleme yapabilmek için `ADMIN_PASSWORD` ve `APP_SECRET` alanlarını girin. `APP_SECRET` değerini oluşturmak için aşağıdaki komutu kullanabilirsiniz:)
+
+   ```bash
+   openssl rand -hex 32
+   ```
+
+3. Gerekli bağımlılıkları yükleyin:
 
    ```bash
    npm i express multer node-fetch spotify-web-api-node dotenv archiver && npm i -D nodemon
    ```
-2. Uygulamayı başlatın:
+
+4. Uygulamayı başlatın:
 
    ```bash
    npm start
    ```
-3. Tarayıcıda açın: [http://localhost:5174](http://localhost:5174)
+
+5. Tarayıcıda açın: [http://localhost:5174](http://localhost:5174)
 
 ---
 
 ## Hızlı Başlangıç (Docker Compose)
 
-```
-services:
-  web:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    image: groovify:prod
-    container_name: Groovify
-    env_file: .env
-    environment:
-      - NODE_ENV=production
-      - PORT=5174
-      - YT_FORCE_IPV4=1
-      - YTDLP_EXTRA=--force-ipv4
-    ports:
-      - "5174:5174"
-    volumes:
-      - ./uploads:/usr/src/app/uploads
-      - ./outputs:/usr/src/app/outputs
-      - ./temp:/usr/src/app/temp
-      - ./cookies/cookies.txt:/usr/src/app/cookies/cookies.txt:ro
-    restart: unless-stopped
-```
+1. Repoyu indirin ve dizine geçin:
 
-Çalıştırın:
+   ```bash
+   git clone https://github.com/G-grbz/Groovify
+   cd Groovify
+   ```
 
-```bash
-docker compose up -d --build
-```
+2. `.env` dosyasını oluşturun. (UI üzerinden düzenleme yapabilmek için `ADMIN_PASSWORD` ve `APP_SECRET` alanlarını girin. `APP_SECRET` değerini oluşturmak için aşağıdaki komutu kullanabilirsiniz:)
+
+   ```bash
+   openssl rand -hex 32
+   ```
+
+3. Uygulamayı Docker Compose ile başlatın:
+
+   ```bash
+   docker compose up -d --build
+   ```
+
+4. Tarayıcıda açın: [http://localhost:5174](http://localhost:5174)
 
 ---
 
