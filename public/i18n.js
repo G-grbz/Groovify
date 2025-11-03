@@ -4,7 +4,7 @@
     ['data-i18n', 'textContent'],
     ['data-i18n-title', 'title'],
     ['data-i18n-ph', 'placeholder'],
-    ['data-i18n-aria', 'ariaLabel'],
+    ['data-i18n-aria', 'aria-label'],
   ];
 
   async function loadDict(lang) {

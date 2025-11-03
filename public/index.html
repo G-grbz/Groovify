@@ -11,20 +11,24 @@
     <div class="header">
       <div class="title-section">
         <h1 data >🎵 Groovify</h1>
-        <p class="subtitle" data-i18n="app.subtitle">Video/Audio dosyalarını MP3, FLAC, WAV, OGG, MP4 formatlarına dönüştürün</p>
+        <p class="subtitle" data-i18n="app.subtitle">Linkten sese, tek tık: Groovify.</p>
+      </div>
+      <div class="lang-toggle">
+          <button type="button" class="btn-outline" data-lang="tr">TR</button>
+          <button type="button" class="btn-outline" data-lang="en">EN</button>
+          <button type="button" class="btn-outline" data-lang="de">DE</button>
+          <button type="button" class="btn-outline" data-lang="fr">FR</button>
       </div>
       <div class="theme-toggle" id="themeToggle">
         <span class="theme-icon">🌙</span>
         <div class="toggle-switch"></div>
         <span class="theme-icon">☀️</span>
       </div>
-      <button id="settingsBtn" class="btn-outline" data-i18n-title="btn.envSettings">⚙️</button>
-      <div class="lang-toggle">
-        <button type="button" class="btn-outline" data-lang="tr">TR</button>
-        <button type="button" class="btn-outline" data-lang="en">EN</button>
-        <button type="button" class="btn-outline" data-lang="de">DE</button>
-        <button type="button" class="btn-outline" data-lang="fr">FR</button>
-      </div>
+        <button id="settingsBtn" class="btn-outline" data-i18n-title="btn.envSettings">⚙️</button>
+        <button id="jobsBell" class="jobs-bell" title="Aktif işler" hidden>
+          <span class="bell-icon">🔔</span>
+          <span id="jobsBadge" class="jobs-badge" hidden>0</span>
+        </button>
     </div>
 
     <div class="card-grid">
@@ -105,7 +109,7 @@
         <label class="select-all"><input type="checkbox" id="selectAllChk" /> <span data-i18n="label.selectAll">Hepsini seç</span></label>
         <label class="switch">
           <input type="checkbox" id="sequentialChk" />
-          <span class="muted" data-i18n="label.sequential">Tek tek indir (sequential)</span>
+          <span class="muted" data-i18n="label.sequential">Tek tek indir</span>
         </label>
         <button id="convertSelectedBtn" data-i18n="btn.convertSelected">Seçilenleri Dönüştür</button>
         <button class="btn-outline" id="convertAllBtn" data-i18n="btn.convertAll">Tümünü Dönüştür</button>
@@ -129,16 +133,80 @@
       <h2 data-i18n="section.jobs">📊 Aktif İşler</h2>
       <div id="jobList">
         <div class="job-item" id="job-empty">
-          <div style="text-align: center; color: var(--text-muted); padding: 20px;">
-            <span data-i18n="jobs.empty">Henüz iş bulunmuyor</span>
+          <div class="jobs-empty-state">
+            <div class="jobs-empty-icon">🎵</div>
+            <h3 class="jobs-empty-title" data-i18n="jobsPanel.emptyActive">Henüz iş yok</h3>
+            <p class="jobs-empty-subtitle" data-i18n="jobs.emptySubtitle">Bir URL ekleyerek veya dosya yükleyerek dönüşüme başlayın</p>
+            <div class="jobs-empty-actions">
+              <button class="jobs-empty-action" onclick="focusUrlInput()" data-i18n="jobs.startWithUrl">URL ile Başla</button>
+              <button class="jobs-empty-action jobs-empty-action--outline" onclick="focusFileInput()" data-i18n="section.file">Dosya Yükle</button>
+            </div>
           </div>
         </div>
       </div>
     </div>
   </div>
 
+  <aside id="jobsPanel" class="jobs-panel" aria-hidden="true">
+    <header class="jobs-panel__header">
+      <div class="title" data-i18n="jobsPanel.title">Aktif İşler</div>
+      <div class="controls">
+        <button id="jobsFilterActive" class="chip chip--active" data-filter="active" data-i18n="jobsPanel.filterActive">Aktif</button>
+        <button id="jobsFilterAll" class="chip" data-filter="all" data-i18n="jobsPanel.filterAll">Tümü</button>
+        <button id="jobsClose" class="icon-btn" aria-label="Kapat" data-i18n="btn.close">✕</button>
+      </div>
+    </header>
+    <div id="jobsList" class="jobs-list">
+      <!-- Boş durum için içerik -->
+      <div class="jobs-panel__empty" id="jobsPanelEmpty">
+        <div class="jobs-panel__empty-icon">🎵</div>
+        <div class="jobs-panel__empty-title">Henüz iş yok</div>
+        <div class="jobs-panel__empty-subtitle">Dönüştürme işlemleri burada görünecek. Hemen başlamak için bir URL ekleyin veya dosya yükleyin.</div>
+        <div class="jobs-panel__empty-actions">
+          <button class="jobs-panel__empty-action" onclick="focusUrlInputAndClose()">URL Ekle</button>
+          <button class="jobs-panel__empty-action jobs-panel__empty-action--outline" onclick="focusFileInputAndClose()">Dosya Seç</button>
+        </div>
+      </div>
+    </div>
+  </aside>
+  <div id="jobsOverlay" class="jobs-overlay" hidden></div>
+
   <script src="/i18n.js"></script>
   <script>
+
+  function focusUrlInput() {
+      const urlInput = document.getElementById('urlInput');
+      if (urlInput) {
+        urlInput.focus();
+        urlInput.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
+    }
+
+    function focusFileInput() {
+      const fileInput = document.getElementById('fileInput');
+      if (fileInput) {
+        fileInput.click();
+        fileInput.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
+    }
+
+    function focusUrlInputAndClose() {
+      focusUrlInput();
+      closeJobsPanel();
+    }
+
+    function focusFileInputAndClose() {
+      focusFileInput();
+      closeJobsPanel();
+    }
+
+    function closeJobsPanel() {
+      const panel = document.getElementById('jobsPanel');
+      const overlay = document.getElementById('jobsOverlay');
+      if (panel) panel.setAttribute('aria-hidden', 'true');
+      if (overlay) overlay.hidden = true;
+    }
+
     function isSpotifyUrl(u){
       return /^(https?:\/\/open\.spotify\.com|spotify:)/i.test(String(u||""));
     }
@@ -164,6 +232,7 @@
           title: '', count: 0, page: 1, pageSize: 25,
           isSpotify: false, streaming: false,
           indexToId: new Map(),
+          indexToTitle: new Map()
         };
         this.currentSpotifyTask = {
           id: null,
@@ -185,6 +254,11 @@
         this.initializeTheme();
         this.loadFormats();
       }
+
+      normalizeStatus(s) {
+      const v = String(s || '').toLowerCase();
+      return v === 'cancelled' ? 'canceled' : v;
+    }
 
       initializeTheme() {
         const savedTheme = localStorage.getItem('theme') || 'light';
@@ -260,8 +334,8 @@
         document.getElementById('prevPageBtn').addEventListener('click', () => this.loadPage(this.currentPreview.page - 1));
         document.getElementById('nextPageBtn').addEventListener('click', () => this.loadPage(this.currentPreview.page + 1));
         document.getElementById('pageSizeSel').addEventListener('change', (e) => {
-          this.currentPreview.pageSize = Number(e.target.value) || 50;
-          if (this.currentPreview.url) this.loadPage(1);
+        this.currentPreview.pageSize = Number(e.target.value) || 50;
+          if (this.currentPreview.url) this.loadPage(1, true);
         });
         document.getElementById('startIntegratedBtn').addEventListener('click', () => {
           this.startIntegratedSpotifyProcess();
@@ -290,7 +364,7 @@
 
         document.addEventListener('i18n:applied', () => {
         const modal = document.getElementById('settingsModal');
-if (modal) window.i18n?.apply?.(modal);
+        if (modal) window.i18n?.apply?.(modal);
           if (this.currentPreview.url) this.renderPreview();
           for (const [id, job] of this.jobStates.entries()) {
             this.updateJobUI(job, this.jobToBatch.get(id) || null);
@@ -805,9 +879,12 @@ if (modal) window.i18n?.apply?.(modal);
 
         eventSource.onmessage = (event) => {
           const job = JSON.parse(event.data);
+          job.status = this.normalizeStatus(job.status);
+          job.currentPhase = this.normalizeStatus(job.currentPhase);
+          job.phase = this.normalizeStatus(job.phase);
           this.updateSpotifyJobUI(job);
 
-          if (job.status === 'completed' || job.status === 'error') {
+          if (job.status === 'completed' || job.status === 'error' || job.status === 'canceled') {
             eventSource.close();
             this.onSpotifyJobCompleted(job);
           }
@@ -978,9 +1055,12 @@ if (modal) window.i18n?.apply?.(modal);
         const eventSource = new EventSource(`/api/stream/${jobId}`);
         eventSource.onmessage = (event) => {
           const job = JSON.parse(event.data);
+          job.status = this.normalizeStatus(job.status);
+          job.currentPhase = this.normalizeStatus(job.currentPhase);
+          job.phase = this.normalizeStatus(job.phase);
           this.jobStates.set(jobId, job);
           this.updateJobUI(job, batchId);
-          if (job.status === 'completed' || job.status === 'error') {
+          if (job.status === 'completed' || job.status === 'error' || job.status === 'canceled') {
             eventSource.close();
             this.currentJobs.delete(jobId);
           }
@@ -993,7 +1073,29 @@ if (modal) window.i18n?.apply?.(modal);
         this.currentJobs.set(jobId, eventSource);
       }
 
+      uiCurrentIndex(job) {
+  const total = job.playlist?.total;
+  const done  = job.playlist?.done;
+  if (Number.isFinite(total) && Number.isFinite(done) && total > 0) {
+    return Math.min(Math.max(0, done || 0), Math.max(0, total - 1));
+  }
+  return null;
+}
+
+uiNowTitle(job) {
+  if (job.metadata?.isPlaylist && Array.isArray(job.metadata?.frozenEntries) && job.metadata.frozenEntries.length) {
+    const i0 = this.uiCurrentIndex(job);
+    if (i0 !== null && job.metadata.frozenEntries[i0]) {
+      const e = job.metadata.frozenEntries[i0];
+      return `${e.index}. ${e.title}`;
+    }
+  }
+  const ex = job.metadata?.extracted || {};
+  return ex.track || ex.title || job.metadata?.originalName || null;
+}
+
       updateJobUI(job, batchId = null) {
+        const statusNorm = this.normalizeStatus(job.status);
         const batchKey = batchId || job.clientBatch;
 
         if (batchKey) {
@@ -1002,21 +1104,31 @@ if (modal) window.i18n?.apply?.(modal);
             batch.jobs.add(job.id);
             this.jobStates.set(job.id, job);
 
-            if (job.status === 'completed' && job.resultPath && !Array.isArray(job.resultPath)) {
+            if (statusNorm === 'completed' && job.resultPath && !Array.isArray(job.resultPath)) {
+              const selIdx = Array.isArray(job.metadata?.selectedIndices)
+                ? job.metadata.selectedIndices[0]
+                : null;
+
+              let resolvedTitle =
+                job.metadata?.extracted?.track ||
+                job.metadata?.originalName ||
+                (selIdx && this.currentPreview.indexToTitle.get(selIdx)) ||
+                t('ui.track');
+
               this.appendBatchRow(batchKey, {
-                title: job.metadata?.extracted?.track || job.metadata?.originalName || t('ui.track'),
+                title: resolvedTitle,
                 href: this.toRelative(job.resultPath)
               });
             }
             this.updateBatchProgress(batchKey);
-            const allJobs = Array.from(batch.jobs);
-            const completedJobs = allJobs.filter(jobId => {
+              const allJobs = Array.from(batch.jobs);
+              const completedJobs = allJobs.filter(jobId => {
               const j = this.jobStates.get(jobId);
-              return j && j.status === 'completed';
+              return j && this.normalizeStatus(j.status) === 'completed';
             }).length;
             if (completedJobs >= batch.total && !batch.el.querySelector('.zip-all')) {
               const lastCompletedJob = allJobs.map(id => this.jobStates.get(id))
-              .find(j => j && j.status === 'completed' && j.zipPath);
+              .find(j => j && this.normalizeStatus(j.status) === 'completed' && j.zipPath);
 
               if (lastCompletedJob && lastCompletedJob.zipPath) {
                 const zipBtn = document.createElement('div');
@@ -1050,6 +1162,8 @@ if (modal) window.i18n?.apply?.(modal);
         downloading: t('phase.downloading'),
         converting: t('phase.converting'),
         completed: t('phase.completed'),
+        canceled: t('status.canceled'),
+        cancelled: t('status.canceled'),
         error: t('phase.error')
       };
 
@@ -1107,12 +1221,25 @@ if (modal) window.i18n?.apply?.(modal);
       queued: t('status.queued'),
       running: t('status.running'),
       completed: t('status.completed'),
-      error: t('status.error')
+      error: t('status.error'),
+      canceled: t('status.canceled'),
+      cancelled: t('status.canceled')
     };
 
     let jobTitle = job.metadata?.originalName || job.metadata?.source || '';
     if (job.metadata.source === 'spotify') {
       jobTitle = `🎵 ${job.metadata.spotifyTitle || t('ui.spotifyPlaylist')}`;
+    }
+    {
+      const nowTrack = this.uiNowTitle(job);
+      if (job.metadata?.isPlaylist && nowTrack) {
+        const listName =
+          job.metadata?.frozenTitle
+          || (job.metadata?.source === 'spotify'
+                ? (job.metadata?.spotifyTitle || t('ui.spotifyPlaylist'))
+                : t('ui.youtubePlaylist'));
+        jobTitle = `${this.escapeHtml(listName)} — ${this.escapeHtml(nowTrack)}`;
+      }
     }
 
     let resultContent = '';
@@ -1158,15 +1285,53 @@ if (modal) window.i18n?.apply?.(modal);
 
       ${phaseDetails}
 
+      ${(() => {
+        const nt = this.uiNowTitle(job);
+        return nt ? `<div class="muted" style="font-size:12px; margin: 6px 0;">▶️ <strong>${this.escapeHtml(nt)}</strong></div>` : '';
+      })()}
+
       <div class="progress-bar">
         <div class="progress-fill" style="width: ${totalProgress}%"></div>
       </div>
-      <div style="display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; margin-top: 8px;">
+      <div class="job-actions" style="display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; margin-top: 8px;">
         <span class="status status-${job.status}">${statusText[job.status]}</span>
-        ${resultContent}
+        <div style="display:flex; gap:8px; align-items:center;">
+          ${resultContent}
+          <button class="btn-danger" data-stop="${job.id}" ${(['completed','error','canceled'].includes(statusNorm)) ? 'disabled' : ''} title="${t('btn.stop')}">${t('btn.stop')}</button>
+        </div>
       </div>
       ${job.error ? `<div style="color: var(--error); font-size: 13px; margin-top: 8px; padding: 8px; background: var(--bg-card); border-radius: 6px;">${this.escapeHtml(job.error)}</div>` : ''}
     `;
+    const stopBtn = jobElement.querySelector(`[data-stop="${job.id}"]`);
+    if (stopBtn) {
+      stopBtn.addEventListener('click', async () => {
+      stopBtn.disabled = true;
+
+    const bId = this.jobToBatch.get(job.id) || job.clientBatch || null;
+
+    try {
+      if (bId) {
+        await this.cancelBatch(bId);
+        } else {
+          const r = await fetch(`/api/jobs/${encodeURIComponent(job.id)}/cancel`, { method: 'POST' });
+          if (!r.ok) {
+            const e = await r.json().catch(()=>({}));
+            throw new Error(e?.error?.message || t('notif.cancelFailed'));
+          }
+          const js = this.jobStates.get(job.id) || {};
+          js.status = 'canceled';
+          js.phase = 'canceled';
+          this.jobStates.set(job.id, js);
+          this.updateJobUI(js, this.jobToBatch.get(job.id) || null);
+        }
+
+        this.showNotification(t('notif.canceledByUser'), 'success');
+      } catch (e) {
+        stopBtn.disabled = false;
+        this.showNotification(`${t('notif.cancelFailed')}: ${e.message}`, 'error');
+      }
+    });
+  }
   }
 
       ensureBatch(batchId, total, meta) {
@@ -1184,8 +1349,10 @@ if (modal) window.i18n?.apply?.(modal);
         const batchElement = document.createElement('div');
         batchElement.className = 'job-item';
         batchElement.id = `batch-${batchId}`;
+        const sourceText = meta?.source || t('ui.playlist');
+        const seqText = t('label.sequential');
         batchElement.innerHTML = `
-          <strong>${t('batch.header')} - ${meta?.source || ''}</strong>
+          <strong>${sourceText} — ${seqText}</strong>
           <div style="font-size: 13px; color: var(--text-muted); margin: 8px 0;">
             ${meta?.format?.toUpperCase() || ''} • ${meta?.bitrate || ''}
           </div>
@@ -1194,6 +1361,11 @@ if (modal) window.i18n?.apply?.(modal);
           </div>
           <div class="batch-info">
             ${t('batch.done')}: <span id="batch-done-${batchId}">0</span> / <span id="batch-total-${batchId}">${total || '?'}</span>
+          </div>
+          <div class="batch-actions" style="margin:8px 0 4px; display:flex; justify-content:flex-end;">
+            <button class="btn-danger" data-stop-batch="${batchId}">
+              ${t('btn.stop') || 'Hepsini Durdur'}
+            </button>
           </div>
           <div class="download-list" id="batch-list-${batchId}"></div>
         `;
@@ -1208,6 +1380,10 @@ if (modal) window.i18n?.apply?.(modal);
         };
 
         this.batches.set(batchId, batch);
+        const stopBtn = batchElement.querySelector(`[data-stop-batch="${batchId}"]`);
+if (stopBtn) {
+  stopBtn.addEventListener('click', () => this.cancelBatch(batchId));
+}
         return batch;
       }
 
@@ -1244,6 +1420,14 @@ if (modal) window.i18n?.apply?.(modal);
           doneElement.textContent = completedJobs;
           totalElement.textContent = batch.total;
         }
+
+        const anyActive = Array.from(batch.jobs).some(jobId => {
+      const j = this.jobStates.get(jobId);
+      const s = j ? this.normalizeStatus(j.status) : 'completed';
+      return !['completed','error','canceled'].includes(s);
+    });
+    const stopBtn = document.querySelector(`[data-stop-batch="${batchId}"]`);
+    if (stopBtn) stopBtn.disabled = !anyActive;
       }
 
       async previewPlaylist() {
@@ -1370,6 +1554,9 @@ if (modal) window.i18n?.apply?.(modal);
           if (item && Number.isFinite(item.index) && item.id) {
           this.currentPreview.indexToId.set(item.index, item.id);
         }
+        if (item && Number.isFinite(item.index) && item.title) {
+          this.currentPreview.indexToTitle.set(item.index, item.title);
+        }
           const row = document.createElement('div');
           row.className = 'preview-row';
           row.innerHTML = `
@@ -1412,7 +1599,7 @@ if (modal) window.i18n?.apply?.(modal);
         }
       }
 
-      async loadPage(p) {
+      async loadPage(p, force = false) {
         if (!this.currentPreview.url) return;
         if (this.currentPreview.isSpotify && this.currentPreview.streaming){
           this.showNotification(t('ui.liveModeNoPaging'), 'info');
@@ -1421,7 +1608,7 @@ if (modal) window.i18n?.apply?.(modal);
         const total = this.currentPreview.count || 0;
         const maxPage = Math.max(1, Math.ceil(total / this.currentPreview.pageSize));
         const next = Math.min(Math.max(1, p), maxPage);
-        if (next === this.currentPreview.page) return;
+        if (next === this.currentPreview.page && !force) return;
         try {
           const prevBtn = document.getElementById('prevPageBtn');
           const nextBtn = document.getElementById('nextPageBtn');
@@ -1482,6 +1669,9 @@ if (modal) window.i18n?.apply?.(modal);
         this.currentPreview.items.forEach((item) => {
           if (item && Number.isFinite(item.index) && item.id) {
           this.currentPreview.indexToId.set(item.index, item.id);
+        }
+        if (item && Number.isFinite(item.index) && item.title) {
+          this.currentPreview.indexToTitle.set(item.index, item.title);
         }
           const row = document.createElement('div');
           row.className = 'preview-row';
@@ -1648,7 +1838,8 @@ if (modal) window.i18n?.apply?.(modal);
         url: null, items: [], selected: new Set(),
         title: '', count: 0, page: 1, pageSize: 50,
         isSpotify: false, streaming: false,
-        indexToId: new Map()
+        indexToId: new Map(),
+        indexToTitle: new Map()
         };
         this.currentSpotifyTask = {
           id: null,
@@ -1683,6 +1874,37 @@ if (modal) window.i18n?.apply?.(modal);
         const s = Math.floor(sec % 60);
         return (h ? h.toString().padStart(2,'0')+':' : '') + m.toString().padStart(2,'0') + ':' + s.toString().padStart(2,'0');
       }
+
+       async cancelBatch(batchId) {
+        const batch = this.batches.get(batchId);
+        if (!batch) return;
+        const ids = Array.from(batch.jobs || []);
+        if (!ids.length) return;
+
+        const stopBtn = document.querySelector(`[data-stop-batch="${batchId}"]`);
+        if (stopBtn) stopBtn.disabled = true;
+
+        const tasks = ids.map(async (id) => {
+          const j = this.jobStates.get(id);
+          const s = this.normalizeStatus(j?.status);
+          if (!j || ['completed','error','canceled'].includes(s)) return;
+          try {
+            const r = await fetch(`/api/jobs/${encodeURIComponent(id)}/cancel`, { method: 'POST' });
+            if (r.ok) {
+              const js = this.jobStates.get(id) || {};
+              js.status = 'canceled';
+              js.phase = 'canceled';
+              js.currentPhase = 'canceled';
+              this.jobStates.set(id, js);
+              this.updateJobUI(js, batchId);
+            }
+          } catch (_) {}
+        });
+
+        await Promise.allSettled(tasks);
+        this.updateBatchProgress(batchId);
+        this.showNotification(t('notif.canceledByUser') || 'Batch iptal edildi', 'success');
+      }
     }
 
     function t(key, vars) {
@@ -1715,7 +1937,8 @@ if (modal) window.i18n?.apply?.(modal);
             <div id="settingsBody" class="settings-dialog__body">
               <div id="loginView">
                 <label class="settings-field-label" data-i18n="settings.adminPassword">Yönetici Şifresi</label>
-                <input id="adminPass" type="password" class="settings-input" />
+                <input id="adminPass" type="password" class="settings-input" autofocus />
+                <div id="adminError" class="settings-error" aria-live="polite" style="display:none"></div>
                 <div class="settings-actions settings-actions--end">
                   <button id="loginBtn" class="btn-primary" data-i18n="btn.login">Giriş yap</button>
                 </div>
@@ -1727,15 +1950,15 @@ if (modal) window.i18n?.apply?.(modal);
                 </div>
                 <div class="form-group">
                   <label data-i18n="settings.spotifyClientSecret">SPOTIFY_CLIENT_SECRET</label>
-                  <input id="f_SPOTIFY_CLIENT_SECRET" type="password" placeholder="••••••••" >
+                  <input id="f_SPOTIFY_CLIENT_SECRET" type="password" placeholder="••••••••" data-i18n-ph="ph.spotifyClientSecret" >
                 </div>
                 <div class="form-group">
                   <label data-i18n="settings.spotifyMarket">SPOTIFY_MARKET</label>
-                  <input id="f_SPOTIFY_MARKET" type="text" placeholder="TR, US, GB vb." >
+                  <input id="f_SPOTIFY_MARKET" type="text" placeholder="TR, US, GB vb." data-i18n-ph="ph.spotifyMarket" >
                 </div>
                 <div class="form-group">
                   <label data-i18n="settings.spotifyFallbackMarkets">SPOTIFY_FALLBACK_MARKETS</label>
-                  <input id="f_SPOTIFY_FALLBACK_MARKETS" type="text" placeholder="US,GB,DE,FR" >
+                  <input id="f_SPOTIFY_FALLBACK_MARKETS" type="text" placeholder="US,GB,DE,FR" data-i18n-ph="ph.spotifyFallbackMarkets" >
                 </div>
                 <div class="form-group">
                   <label data-i18n="settings.ytUseMusic">YT_USE_MUSIC</label>
@@ -1760,15 +1983,15 @@ if (modal) window.i18n?.apply?.(modal);
                 </div>
                 <div class="form-group">
                   <label>YT_DEFAULT_REGION</label>
-                  <input id="f_YT_DEFAULT_REGION" type="text" placeholder="ör: TR, US (boş = kapalı)" >
+                  <input id="f_YT_DEFAULT_REGION" type="text" placeholder="ör: TR, US (boş = kapalı)" data-i18n-ph="ph.ytDefaultRegion" >
                 </div>
                 <div class="form-group">
                   <label>YT_LANG</label>
-                  <input id="f_YT_LANG" type="text" placeholder="en-US, tr-TR ..." >
+                  <input id="f_YT_LANG" type="text" placeholder="en-US, tr-TR ..." data-i18n-ph="ph.ytLang" >
                 </div>
                 <div class="form-group">
                   <label>YT_ACCEPT_LANGUAGE</label>
-                  <input id="f_YT_ACCEPT_LANGUAGE" type="text" placeholder="en-US,en;q=0.8 (opsiyonel)" >
+                  <input id="f_YT_ACCEPT_LANGUAGE" type="text" placeholder="en-US,en;q=0.8 (opsiyonel)" data-i18n-ph="ph.ytAcceptLang" >
                 </div>
                 <div class="form-group">
                   <label>YT_FORCE_IPV4</label>
@@ -1786,11 +2009,11 @@ if (modal) window.i18n?.apply?.(modal);
                 </div>
                 <div class="form-group">
                   <label>YTDLP_UA</label>
-                  <input id="f_YTDLP_UA" type="text" placeholder="User-Agent (opsiyonel)" >
+                  <input id="f_YTDLP_UA" type="text" placeholder="User-Agent (opsiyonel)" data-i18n-ph="ph.ytdlpUA" >
                 </div>
                 <div class="form-group">
                   <label>YTDLP_COOKIES</label>
-                  <input id="f_YTDLP_COOKIES" type="text" placeholder="/path/to/cookies.txt (opsiyonel)" >
+                  <input id="f_YTDLP_COOKIES" type="text" placeholder="/path/to/cookies.txt (opsiyonel)" data-i18n-ph="ph.ytdlpCookies" >
                 </div>
                 <div class="form-group">
                   <label>YTDLP_COOKIES_FROM_BROWSER</label>
@@ -1804,7 +2027,7 @@ if (modal) window.i18n?.apply?.(modal);
                 </div>
                 <div class="form-group">
                   <label>YTDLP_EXTRA</label>
-                  <input id="f_YTDLP_EXTRA" type="text" placeholder="Ek argümanlar, ör: --http-chunk-size 10M" >
+                  <input id="f_YTDLP_EXTRA" type="text" placeholder="Ek argümanlar, ör: --http-chunk-size 10M" data-i18n-ph="ph.ytdlpExtra" >
                 </div>
                 <div class="form-group">
                   <label>YT_STRIP_COOKIES</label>
@@ -1812,6 +2035,22 @@ if (modal) window.i18n?.apply?.(modal);
                     <option value="0">0</option>
                     <option value="1">1</option>
                   </select>
+                </div>
+                <h4 class="settings-section-title" data-i18n="settings.adminPassword">Yönetici Şifresi</h4>
+                <div class="form-group">
+                  <label class="settings-field-label" data-i18n="settings.currentPassword">Eski Şifre</label>
+                  <input id="f_ADMIN_OLD" type="password" placeholder="••••••••" data-i18n-ph="settings.currentPassword" />
+                </div>
+                <div class="form-group">
+                  <label class="settings-field-label" data-i18n="settings.newPassword">Yeni Şifre</label>
+                  <input id="f_ADMIN_NEW" type="password" placeholder="En az 6 karakter" data-i18n-ph="settings.newPassword" />
+                </div>
+                <div class="form-group">
+                  <label class="settings-field-label" data-i18n="settings.newPassword2">Yeni Şifre (Tekrar)</label>
+                  <input id="f_ADMIN_NEW2" type="password" placeholder="Yeni Şifre (Tekrar)" data-i18n-ph="settings.newPassword2" />
+                </div>
+                <div class="settings-actions settings-actions--end">
+                  <button id="changePassBtn" class="btn-primary" data-i18n="btn.changePassword">Şifreyi Güncelle</button>
                 </div>
                 <div class="settings-actions settings-actions--between">
                   <button id="logoutBtn" class="btn-outline" data-i18n="btn.logout">Çıkış</button>
@@ -1830,6 +2069,7 @@ if (modal) window.i18n?.apply?.(modal);
         document.getElementById('logoutBtn').onclick = doLogout;
         document.getElementById('reloadBtn').onclick = loadSettings;
         document.getElementById('saveBtn').onclick = saveSettings;
+        document.getElementById('changePassBtn').onclick = changePassword;
         window.i18n?.apply?.(wrap);
       }
 
@@ -1837,30 +2077,57 @@ if (modal) window.i18n?.apply?.(modal);
         ensureModal();
         const modal = document.getElementById('settingsModal');
         modal.style.display = 'flex';
+        const passEl = document.getElementById('adminPass');
+        const loginBtn = document.getElementById('loginBtn');
+        const onEnter = (e) => {
+           if (e.key === 'Enter') {
+             e.preventDefault();
+             loginBtn?.click();
+           }
+         };
+        passEl?.addEventListener('keydown', onEnter, { passive: false });
         const token = localStorage.getItem(tokenKey);
         if (token) {
           showForm();
           loadSettings();
         } else {
           showLogin();
+          requestAnimationFrame(() => document.getElementById('adminPass')?.focus());
         }
       }
+
       function closeSettingsModal(){
         const modal = document.getElementById('settingsModal');
         if (modal) modal.style.display = 'none';
       }
+
       function showLogin(){
         document.getElementById('loginView').style.display = 'flex';
         document.getElementById('formView').style.display = 'none';
         document.getElementById('adminPass').value = '';
+        requestAnimationFrame(() => document.getElementById('adminPass')?.focus());
       }
+
       function showForm(){
         document.getElementById('loginView').style.display = 'none';
         document.getElementById('formView').style.display = 'block';
       }
+
       async function doLogin(){
         const password = document.getElementById('adminPass').value;
-        try{
+        const errEl = document.getElementById('adminError');
+        const btn = document.getElementById('loginBtn');
+        const passEl = document.getElementById('adminPass');
+        if (errEl) { errEl.style.display = 'none'; errEl.textContent = ''; }
+
+        if (!password) {
+          if (errEl) { errEl.textContent = t?.('errors.emptyPassword') || 'Lütfen şifreyi girin.'; errEl.style.display = 'block'; }
+          passEl?.focus();
+          return;
+        }
+        try {
+        btn?.classList.add('btn-loading');
+        btn && (btn.disabled = true);
           const r = await fetch('/api/auth/login', {
             method:'POST',
             headers:{'Content-Type':'application/json'},
@@ -1868,20 +2135,36 @@ if (modal) window.i18n?.apply?.(modal);
           });
           if (!r.ok) {
             const e = await r.json().catch(()=>({}));
-            throw new Error(e?.error?.message || t('errors.loginFailed'));
+            const code = e?.error?.code;
+            let msg =
+              (code === 'BAD_PASSWORD') ? (t?.('errors.BAD_PASSWORD') || 'Hatalı şifre.') :
+              (code === 'NO_ADMIN_PASSWORD') ? (t?.('errors.NO_ADMIN_PASSWORD') || 'Sunucuda ADMIN_PASSWORD tanımlı değil.') :
+              (e?.error?.message || t?.('errors.loginFailed') || 'Giriş yapılamadı.');
+            throw new Error(msg);
           }
           const data = await r.json();
           localStorage.setItem(tokenKey, data.token);
+          window.dispatchEvent(new CustomEvent('groovify:auth', { detail: { loggedIn: true } }));
           showForm();
           await loadSettings();
         }catch(e){
-          alert(t('notif.errorPrefix') + ': ' + e.message);
+          if (errEl) { errEl.textContent = String(e.message || 'Giriş hatası'); errEl.style.display = 'block'; }
+          passEl?.classList.add('shake');
+          setTimeout(()=> passEl?.classList.remove('shake'), 350);
+          passEl?.focus();
+        } finally {
+          btn?.classList.remove('btn-loading');
+          btn && (btn.disabled = false);
         }
       }
+
       async function doLogout(){
         localStorage.removeItem(tokenKey);
+        window.dispatchEvent(new CustomEvent('groovify:auth', { detail: { loggedIn: false } }));
         showLogin();
+        requestAnimationFrame(() => document.getElementById('adminPass')?.focus());
       }
+
       async function loadSettings(){
         const token = localStorage.getItem(tokenKey) || "";
         try{
@@ -1952,6 +2235,63 @@ if (modal) window.i18n?.apply?.(modal);
           alert(t('settings.errorSaving') + ': ' + e.message);
         }
       }
+
+      async function changePassword(){
+      const token = localStorage.getItem(tokenKey) || "";
+      const oldPassword = document.getElementById('f_ADMIN_OLD').value;
+      const newPassword = document.getElementById('f_ADMIN_NEW').value;
+      const newPassword2 = document.getElementById('f_ADMIN_NEW2').value;
+
+      if (!oldPassword || !newPassword || !newPassword2) {
+        alert((t && t('settings.errors.fieldsRequired')) || 'Tüm alanlar zorunludur.');
+        return;
+      }
+      if (newPassword !== newPassword2) {
+        alert((t && t('settings.errors.passwordMismatch')) || 'Yeni şifreler eşleşmiyor.');
+        return;
+      }
+      if (String(newPassword).length < 6) {
+        alert((t && t('settings.errors.passwordTooShort')) || 'Yeni şifre en az 6 karakter olmalıdır.');
+        return;
+      }
+
+      try {
+        const r = await fetch('/api/auth/change-password', {
+          method:'POST',
+          headers:{ 'Content-Type':'application/json', 'Authorization': 'Bearer ' + token },
+          body: JSON.stringify({ oldPassword, newPassword, newPassword2 })
+        });
+
+        if (!r.ok) {
+          const e = await r.json().catch(()=>({}));
+          const code = e?.error?.code;
+          const map = {
+            BAD_PASSWORD: 'errors.BAD_PASSWORD',
+            PASSWORD_MISMATCH: 'errors.PASSWORD_MISMATCH',
+            PASSWORD_TOO_SHORT: 'errors.PASSWORD_TOO_SHORT',
+            FIELDS_REQUIRED: 'errors.FIELDS_REQUIRED',
+            PASSWORD_SAVE_FAILED: 'errors.PASSWORD_SAVE_FAILED',
+            UNAUTHORIZED: 'errors.UNAUTHORIZED'
+          };
+          const key = map[code] || 'errors.changePasswordFailed';
+          const msg = (t && t(key)) || (e?.error?.message || 'Şifre değiştirilemedi.');
+          throw new Error(msg);
+        }
+
+        const data = await r.json();
+        alert((t && t('settings.passwordChanged')) || 'Şifre güncellendi. Lütfen yeniden giriş yapın.');
+        if (data.logout) {
+          localStorage.removeItem(tokenKey);
+          window.dispatchEvent(new CustomEvent('groovify:auth', { detail: { loggedIn: false } }));
+          document.getElementById('f_ADMIN_OLD').value = '';
+          document.getElementById('f_ADMIN_NEW').value = '';
+          document.getElementById('f_ADMIN_NEW2').value = '';
+          showLogin();
+        }
+      } catch (e) {
+          alert(String(e.message || 'Şifre değiştirilemedi.'));
+        }
+      }
     });
 
     document.addEventListener('DOMContentLoaded', () => {
@@ -1982,6 +2322,311 @@ if (modal) window.i18n?.apply?.(modal);
     window.addEventListener('scroll', placeTitle, { passive: true });
     new ResizeObserver(placeTitle).observe(document.documentElement);
   });
-  </script>
-</body>
+
+(function(){
+      const tokenKey = "groovify_admin_token";
+      const bell = document.getElementById('jobsBell');
+      const badge = document.getElementById('jobsBadge');
+      const panel = document.getElementById('jobsPanel');
+      const overlay = document.getElementById('jobsOverlay');
+      const list = document.getElementById('jobsList');
+      const emptyState = document.getElementById('jobsPanelEmpty');
+      const fActive = document.getElementById('jobsFilterActive');
+      const fAll = document.getElementById('jobsFilterAll');
+      const btnClose = document.getElementById('jobsClose');
+
+      let state = { items: [] };
+      let filter = 'active';
+      let es = null;
+      let started = false;
+
+      function norm(s){
+        const v = String(s || '').toLowerCase();
+        return v === 'cancelled' ? 'canceled' : v;
+      }
+
+      function start() {
+        if (started) return;
+        started = true;
+        bell?.addEventListener('click', ()=>{
+          panel.setAttribute('aria-hidden','false');
+          overlay.hidden=false;
+        });
+        overlay?.addEventListener('click', ()=>{
+          panel.setAttribute('aria-hidden','true');
+          overlay.hidden=true;
+        });
+        btnClose?.addEventListener('click', ()=>{
+          panel.setAttribute('aria-hidden','true');
+          overlay.hidden=true;
+        });
+        fActive?.addEventListener('click', ()=>{
+          filter='active';
+          fActive.classList.add('chip--active');
+          fAll.classList.remove('chip--active');
+          render();
+        });
+        fAll?.addEventListener('click', ()=>{
+          filter='all';
+          fAll.classList.add('chip--active');
+          fActive.classList.remove('chip--active');
+          render();
+        });
+      }
+
+      function goOnline() {
+        bell.hidden = false;
+        try { es?.close?.(); } catch {}
+        startSSE();
+      }
+
+      function goOffline() {
+        bell.hidden = true;
+        panel.setAttribute('aria-hidden','true');
+        overlay.hidden = true;
+        try { es?.close?.(); } catch {}
+        es = null;
+        state = { items: [] };
+        render();
+      }
+
+      start();
+      if (localStorage.getItem(tokenKey)) goOnline(); else goOffline();
+
+      window.addEventListener('groovify:auth', (ev)=>{
+        const on = !!ev?.detail?.loggedIn;
+        if (on) goOnline(); else goOffline();
+      });
+
+      window.addEventListener('storage', (ev)=>{
+        if (ev.key !== tokenKey) return;
+        if (ev.newValue) goOnline(); else goOffline();
+      });
+
+      function titleOf(j){
+        const m = j.metadata || {}; const ex = m.extracted || {};
+        return m.frozenTitle || m.spotifyTitle || ex.title || m.originalName ||
+               (m.isAutomix ? t('jobsPanel.automix') : (m.isPlaylist ? t('jobsPanel.playlist') : t('jobsPanel.job')));
+      }
+
+      function sourcePill(j){
+        const s = j.metadata?.source || 'file';
+        const sources = {
+          youtube: t('jobsPanel.sourceYouTube'),
+          spotify: t('jobsPanel.sourceSpotify'),
+          direct_url: t('jobsPanel.sourceURL'),
+          file: t('jobsPanel.sourceFile')
+        };
+        return sources[s] || s;
+      }
+
+      function phasePill(j){
+        const p = norm(j.currentPhase || j.status);
+        const map = {
+          preparing: t('phase.preparing'),
+          downloading: t('phase.downloading'),
+          converting: t('phase.converting'),
+          completed: t('phase.completed'),
+          error: t('phase.error'),
+          canceled: t('status.canceled'),
+          cancelled: t('status.canceled')
+        };
+        return map[p] || (j.currentPhase || j.status);
+      }
+
+      function statusDot(j){
+        const s = norm(j.status);
+        if (s==='error') return '<span class="dot status-err">●</span>';
+        if (s==='completed') return '<span class="dot status-ok">●</span>';
+        if (s==='canceled') return '<span class="dot status-warn">●</span>';
+        return '<span class="dot status-warn">●</span>';
+      }
+
+      function prog(j){
+        if (typeof j.progress==='number') return j.progress;
+        const d=j.downloadProgress||0, c=j.convertProgress||0;
+        return Math.floor((d+c)/2);
+      }
+
+      function currentIndex(j) {
+        const total = j.playlist?.total;
+        const done  = j.playlist?.done;
+        if (Number.isFinite(total) && Number.isFinite(done) && total > 0) {
+          const idx0 = Math.min(Math.max(0, done || 0), Math.max(0, total - 1));
+          return idx0;
+        }
+        return null;
+      }
+
+      function nowTitle(j){
+        if (j.metadata?.isPlaylist && Array.isArray(j.metadata?.frozenEntries) && j.metadata.frozenEntries.length) {
+          const i0 = currentIndex(j);
+          if (i0 !== null && j.metadata.frozenEntries[i0]) {
+            return `${j.metadata.frozenEntries[i0].index}. ${j.metadata.frozenEntries[i0].title}`;
+          }
+        }
+        const ex = j.metadata?.extracted || {};
+        return ex.track || ex.title || j.metadata?.originalName || null;
+      }
+
+      function render(){
+        const allItems = state.items.slice();
+        const items = (filter==='active')
+         ? allItems.filter(j => !['completed','error','canceled'].includes(norm(j.status)))
+         : allItems;
+
+        const activeCount = allItems.filter(j => !['completed','error','canceled'].includes(norm(j.status))).length;
+        badge.textContent = String(activeCount);
+        badge.hidden = activeCount <= 0;
+
+        if (items.length === 0) {
+          const isActive = (filter === 'active');
+          list.innerHTML = `
+            <div class="jobs-panel__empty">
+             <div class="jobs-panel__empty-icon">🎵</div>
+              <div class="jobs-panel__empty-title">
+                ${isActive ? t('jobsPanel.emptyActive') : t('jobs.empty')}
+              </div>
+              <div class="jobs-panel__empty-subtitle">
+                ${isActive ? t('jobsPanel.emptyDescriptionActive') : t('jobsPanel.emptyDescriptionAll')}
+              </div>
+              <div class="jobs-panel__empty-actions">
+                <button class="jobs-panel__empty-action" onclick="focusUrlInputAndClose()">
+                  ${t('jobsPanel.addUrl')}
+                </button>
+               <button class="jobs-panel__empty-action jobs-panel__empty-action--outline" onclick="focusFileInputAndClose()">
+                  ${t('section.file')}
+                </button>
+              </div>
+            </div>
+          `;
+          return;
+        }
+
+        list.innerHTML = items.map(j=>{
+          const p = prog(j);
+          const zip = j.zipPath ? `<a class="link" href="${j.zipPath}" download>${t('jobsPanel.downloadZip')}</a>` : '';
+          const one = (typeof j.resultPath === 'string') ? `<a class="link" href="${j.resultPath}" download>${t('jobsPanel.downloadFile')}</a>` : '';
+          const many = Array.isArray(j.resultPath) ? `<span class="link" style="opacity:.8" title="${t('jobsPanel.multipleOutputs')}">${t('jobsPanel.multiple')}</span>` : '';
+          const baseTitle = titleOf(j);
+          const nowT = nowTitle(j);
+          const titleText = (j.metadata?.isPlaylist && nowT)
+            ? `${baseTitle} — ${nowT}`
+            : (nowT || baseTitle);
+
+          return `
+            <div class="job-card" data-job-id="${j.id}">
+              <div class="job-title">${statusDot(j)}<span>${titleText}</span></div>
+
+              <div class="job-meta">
+                <span class="pill">${sourcePill(j)}</span>
+                <span class="pill">${(j.format||'').toUpperCase()} ${j.bitrate||''}</span>
+                <span class="pill">${phasePill(j)}</span>
+              </div>
+
+              ${(() => {
+                const nt = nowT;
+                return nt ? `<div class="muted" style="font-size:12px">▶️ <strong>${nt}</strong></div>` : '';
+              })()}
+
+              <div class="progress panel" role="progressbar"
+                   aria-valuemin="0" aria-valuemax="100" aria-valuenow="${p}">
+                <span style="width:${p}%"></span>
+              </div>
+
+              <div class="row panel">
+                <span>${p}%</span>
+                <span style="display:flex; gap:8px; align-items:center;">
+                  ${zip || one || many}
+                  <button class="btn-danger" data-stop-panel="${j.id}" ${(['completed','error','canceled'].includes(norm(j.status))) ? 'disabled' : ''} title="${t('btn.stop')}">${t('btn.stop')}</button>
+                </span>
+              </div>
+            </div>
+          `;
+        }).join('');
+
+        try {
+        list.querySelectorAll('[data-stop-panel]').forEach(btn=>{
+          btn.onclick = async () => {
+            const id = btn.getAttribute('data-stop-panel');
+            btn.disabled = true;
+            const j = state.items.find(x => x.id === id);
+            const cb = j?.clientBatch || null;
+            if (cb) {
+              const sameBatch = state.items.filter(x => x.clientBatch === cb);
+              try {
+                await Promise.allSettled(sameBatch.map(x =>
+                  fetch(`/api/jobs/${encodeURIComponent(x.id)}/cancel`, { method:'POST' })
+                ));
+                state.items = state.items.map(x =>
+                  x.clientBatch === cb ? { ...x, status:'canceled', phase:'canceled' } : x
+                );
+                render();
+                return;
+                } catch(_) {
+              }
+            }
+            try {
+              const r = await fetch(`/api/jobs/${encodeURIComponent(id)}/cancel`, { method:'POST' });
+              if (!r.ok) {
+                const e = await r.json().catch(()=>({}));
+                throw new Error(e?.error?.message || t('notif.cancelFailed'));
+              }
+              const idx = state.items.findIndex(j => j.id === id);
+              if (idx >= 0) {
+                state.items[idx] = { ...state.items[idx], status: 'canceled', phase: 'canceled' };
+                render();
+              }
+            } catch(e) {
+              btn.disabled = false;
+            }
+          };
+        });
+        } catch {}
+      }
+
+      function startSSE(){
+        try {
+          const token = localStorage.getItem(tokenKey) || "";
+          es = new EventSource(`/api/stream?token=${encodeURIComponent(token)}`);
+          es.onmessage = (ev) => {
+            try {
+              state = JSON.parse(ev.data) || { items: [] };
+              render();
+            } catch(e) {
+              console.error('SSE parse error:', e);
+            }
+          };
+          es.onerror = () => {
+            try { es?.close?.(); } catch {}
+            startPolling();
+          };
+        } catch(e) {
+          console.error('SSE connection error:', e);
+          startPolling();
+        }
+      }
+
+      function startPolling(){
+        const poll = () => {
+          const token = localStorage.getItem(tokenKey) || "";
+          fetch(`/api/jobs?status=all`, { headers: { 'Authorization': 'Bearer ' + token }})
+            .then(r=>{
+              if (!r.ok) throw new Error('Failed to fetch jobs');
+              return r.json();
+            })
+            .then(d=>{
+              state = { items: d.items || [] };
+              render();
+            })
+            .catch(e=>{
+              console.error('Polling error:', e);
+            });
+        };
+        poll();
+        setInterval(poll, 1500);
+      }
+    })();
+    </script>
+  </body>
 </html>

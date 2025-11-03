@@ -5,7 +5,7 @@ import crypto from "crypto";
 import { sendOk, sendError } from "../modules/utils.js";
 import { idsToMusicUrls, mapSpotifyToYtm, downloadMatchedSpotifyTracks, createDownloadQueue } from "../modules/sp.js";
 import { isSpotifyUrl, resolveSpotifyUrl } from "../modules/spotify.js";
-import { spotifyMapTasks, spotifyDownloadTasks, jobs } from "../modules/store.js";
+import { spotifyMapTasks, spotifyDownloadTasks, jobs, killJobProcesses } from "../modules/store.js";
 import { processJob } from "../modules/processor.js";
 import { convertMedia, downloadThumbnail } from "../modules/media.js";
 import archiver from "archiver";
@@ -106,7 +106,7 @@ async function processSpotifyIntegrated(jobId, sp, format, bitrate) {
         job.lastLogKey = logKey || null;
         job.lastLogVars = logVars || null;
         job.lastLog = fallback || '';
-        console.log(`[Spotify ${jobId}] ${job.lastLogKey || job.lastLog}`);
+        console.log(`[Spotify ${jobId}] ${fallback || job.lastLogKey || ''}`);
       }
     });
 
@@ -115,7 +115,13 @@ async function processSpotifyIntegrated(jobId, sp, format, bitrate) {
     job.playlist.total = totalItems;
     job.playlist.done = 0;
 
+      const shouldCancel = () => {
+      const j = jobs.get(jobId);
+      return !!(j && (j.canceled || j.status === "canceled"));
+    };
+
     await mapSpotifyToYtm(sp, (idx, item) => {
+      if (shouldCancel()) return;
       job.progress = 5 + Math.floor(((idx + 1) / totalItems) * 25);
       job.lastLogKey = 'log.searchingTrack';
       job.lastLogVars = { artist: item.uploader, title: item.title };
@@ -137,6 +143,7 @@ async function processSpotifyIntegrated(jobId, sp, format, bitrate) {
           uploader: item.uploader,
           webpage_url: item.webpage_url
         });
+        if (shouldCancel()) return;
         dlQueue.enqueue({
           index: item.index,
           id: item.id,
@@ -147,6 +154,7 @@ async function processSpotifyIntegrated(jobId, sp, format, bitrate) {
       }
     }, {
       concurrency: 3,
+      shouldCancel,
       onLog: (payload) => {
         const { logKey, logVars, fallback } =
           (typeof payload === 'string')
@@ -155,9 +163,11 @@ async function processSpotifyIntegrated(jobId, sp, format, bitrate) {
         job.lastLogKey  = logKey || null;
         job.lastLogVars = logVars || null;
         job.lastLog     = fallback || '';
-        console.log(`[Spotify ${jobId}] ${job.lastLogKey || job.lastLog}`);
+        console.log(`[Spotify ${jobId}] ${fallback || job.lastLogKey || ''}`);
       }
     });
+
+    if (shouldCancel()) { throw new Error("CANCELED"); }
 
     if (matchedCount === 0) {
       throw new Error("Hiç eşleşen parça bulunamadı");
@@ -169,6 +179,7 @@ async function processSpotifyIntegrated(jobId, sp, format, bitrate) {
     job.lastLogVars = {};
     job.lastLog = `⏳ Eşleştirmeler tamamlandı. Tüm indirmelerin bitmesi bekleniyor...`;
     await dlQueue.waitForIdle();
+    if (shouldCancel()) { throw new Error("CANCELED"); }
 
     const downloadResults = dlQueue.getResults();
     const successfulDownloads = downloadResults.filter(r => r.filePath);
@@ -207,6 +218,7 @@ async function processSpotifyIntegrated(jobId, sp, format, bitrate) {
     const results = [];
 
     for (let i = 0; i < files.length; i++) {
+      if (shouldCancel()) { throw new Error("CANCELED"); }
       const filePath = files[i];
       const entry = successfulDownloads[i].item;
 
@@ -257,6 +269,7 @@ async function processSpotifyIntegrated(jobId, sp, format, bitrate) {
       }
 
       try {
+        if (shouldCancel()) { throw new Error("CANCELED"); }
         job.lastLogKey = 'log.converting.single';
         job.lastLogVars = { title: entry.title };
         job.lastLog = `⚙️ Dönüştürülüyor: ${entry.title}`;
@@ -269,7 +282,8 @@ async function processSpotifyIntegrated(jobId, sp, format, bitrate) {
           },
           fileMeta, itemCover, (format === "mp4"),
           path.resolve(process.cwd(), "outputs"),
-          path.resolve(process.cwd(), "temp")
+          path.resolve(process.cwd(), "temp"),
+          { onProcess: (child) => { try { registerJobProcess(jobId, child); } catch {} } }
         );
 
         results.push(result);
@@ -291,6 +305,7 @@ async function processSpotifyIntegrated(jobId, sp, format, bitrate) {
     if (successfulResults.length === 0) throw new Error("Hiçbir parça dönüştürülemedi");
 
     job.resultPath = successfulResults;
+    if (shouldCancel()) { throw new Error("CANCELED"); }
     try {
       const zipTitle = job.metadata.spotifyTitle || "Spotify Playlist";
       job.lastLogKey = 'log.zip.creating';
@@ -316,13 +331,23 @@ async function processSpotifyIntegrated(jobId, sp, format, bitrate) {
 
     cleanupSpotifyTempFiles(jobId, files);
   } catch (error) {
-    job.status = "error";
-    job.error = error.message;
-    job.phase = "error";
-    job.lastLogKey = 'log.error';
-    job.lastLogVars = { err: error.message };
-    job.lastLog = `❌ Hata: ${error.message}`;
-    console.error("Spotify entegre işlem hatası:", error);
+    if (String(error?.message || "").toUpperCase() === "CANCELED") {
+      job.status = "canceled";
+      job.error = null;
+      job.phase = "canceled";
+      job.lastLogKey = 'status.canceled';
+      job.lastLogVars = {};
+      job.lastLog = "⛔ İptal edildi";
+      try { killJobProcesses(jobId); } catch {}
+    } else {
+      job.status = "error";
+      job.error = error.message;
+      job.phase = "error";
+      job.lastLogKey = 'log.error';
+      job.lastLogVars = { err: error.message };
+      job.lastLog = `❌ Hata: ${error.message}`;
+      console.error("Spotify entegre işlem hatası:", error);
+    }
   }
 }
 
@@ -338,7 +363,13 @@ async function processSingleTrack(jobId, sp, format, bitrate) {
     job.lastLog = `🔍 Aranıyor: ${sp.items[0]?.artist} - ${sp.items[0]?.title}`;
 
     let matchedItem = null;
+    const shouldCancel = () => {
+      const j = jobs.get(jobId);
+      return !!(j && (j.canceled || j.status === "canceled"));
+    };
+
     await mapSpotifyToYtm(sp, (idx, item) => {
+      if (shouldCancel()) return;
       if (item.id) {
         matchedItem = item;
         job.metadata.selectedIds = [item.id];
@@ -352,6 +383,7 @@ async function processSingleTrack(jobId, sp, format, bitrate) {
       }
     }, {
       concurrency: 1,
+      shouldCancel,
       onLog: (payload) => {
         const { logKey, logVars, fallback } = (typeof payload === 'string')
           ? { logKey: null, logVars: null, fallback: payload }
@@ -362,6 +394,7 @@ async function processSingleTrack(jobId, sp, format, bitrate) {
       }
     });
 
+    if (shouldCancel()) { throw new Error("CANCELED"); }
     if (!matchedItem) {
       throw new Error("Parça eşleştirilemedi");
     }
@@ -374,6 +407,7 @@ async function processSingleTrack(jobId, sp, format, bitrate) {
 
     const dlQueue = createDownloadQueue(jobId, {
       concurrency: 1,
+      shouldCancel,
       onProgress: (done, total) => {
         job.playlist.done = done;
         job.progress = 30 + (done * 40);
@@ -397,6 +431,7 @@ async function processSingleTrack(jobId, sp, format, bitrate) {
     }, 0);
     dlQueue.end();
     await dlQueue.waitForIdle();
+    if (shouldCancel()) { throw new Error("CANCELED"); }
 
     const downloadResults = dlQueue.getResults();
     const successfulDownload = downloadResults.find(r => r.filePath);
@@ -461,7 +496,8 @@ async function processSingleTrack(jobId, sp, format, bitrate) {
       },
       fileMeta, itemCover, (format === "mp4"),
       path.resolve(process.cwd(), "outputs"),
-      path.resolve(process.cwd(), "temp")
+      path.resolve(process.cwd(), "temp"),
+      { onProcess: (child) => { try { registerJobProcess(jobId, child); } catch {} } }
     );
 
     job.resultPath = result.outputPath;
@@ -476,13 +512,23 @@ async function processSingleTrack(jobId, sp, format, bitrate) {
     cleanupSpotifyTempFiles(jobId, [filePath]);
 
   } catch (error) {
-    job.status = "error";
-    job.error = error.message;
-    job.phase = "error";
-    job.lastLogKey = 'log.error';
-    job.lastLogVars = { err: error.message };
-    job.lastLog = `❌ Hata: ${error.message}`;
-    console.error("Tekli parça işlem hatası:", error);
+    if (String(error?.message || "").toUpperCase() === "CANCELED") {
+      job.status = "canceled";
+      job.error = null;
+      job.phase = "canceled";
+      job.lastLogKey = 'status.canceled';
+      job.lastLogVars = {};
+      job.lastLog = "⛔ İptal edildi";
+      try { killJobProcesses(jobId); } catch {}
+    } else {
+      job.status = "error";
+      job.error = error.message;
+      job.phase = "error";
+      job.lastLogKey = 'log.error';
+      job.lastLogVars = { err: error.message };
+      job.lastLog = `❌ Hata: ${error.message}`;
+      console.error("Tekli parça işlem hatası:", error);
+    }
   }
 }
 

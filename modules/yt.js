@@ -1,6 +1,7 @@
 import path from "path";
 import fs from "fs";
 import { spawn, execFile } from "child_process";
+import { registerJobProcess } from "./store.js";
 import { getCache, setCache, mergeCacheEntries, PREVIEW_MAX_ENTRIES } from "./cache.js";
 import { findOnPATH, isExecutable, toNFC } from "./utils.js";
 import { getYouTubeHeaders, getUserAgent, addGeoArgs, getExtraArgs, getLocaleConfig, FLAGS } from "./config.js";
@@ -524,12 +525,13 @@ async function downloadSelectedIds(ytDlpBin, selectedIds, jobId, tempDir, progre
 
   return new Promise((resolve, reject) => {
     let stderrBuf = "";
-    const process = spawn(ytDlpBin, args, { maxBuffer: 1024 * 1024 * 1024 });
+    const child = spawn(ytDlpBin, args);
+    try { registerJobProcess(jobId, child); } catch {}
 
     let downloadedCount = 0;
     const totalCount = selectedIds.length;
 
-    process.stdout.on('data', (data) => {
+    child.stdout.on('data', (data) => {
       const line = data.toString();
       if (line.includes('[download]') && line.includes('%')) {
         const percentMatch = line.match(/(\d+\.\d+)%/);
@@ -545,7 +547,7 @@ async function downloadSelectedIds(ytDlpBin, selectedIds, jobId, tempDir, progre
       }
     });
 
-    process.stderr.on('data', (data) => {
+    child.stderr.on('data', (data) => {
       const line = data.toString();
       stderrBuf += line;
       if (line.includes('[download]') && line.includes('%')) {
@@ -558,7 +560,13 @@ async function downloadSelectedIds(ytDlpBin, selectedIds, jobId, tempDir, progre
       }
     });
 
-    process.on('close', (code) => {
+    child.on('close', (code, signal) => {
+      if (signal === 'SIGTERM' || signal === 'SIGKILL') {
+        return reject(new Error('CANCELED'));
+      }
+      if (code === null && /terminated|killed|aborted|SIGTERM|SIGKILL/i.test(stderrBuf)) {
+        return reject(new Error('CANCELED'));
+      }
       if (code === 0) {
         const files = getDownloadedFiles(playlistDir, true);
         if (files.length > 0) {
@@ -573,7 +581,7 @@ async function downloadSelectedIds(ytDlpBin, selectedIds, jobId, tempDir, progre
       }
     });
 
-    process.on('error', (error) => {
+    child.on('error', (error) => {
       reject(new Error(`yt-dlp başlatılamadı: ${error.message}`));
     });
   });
@@ -677,8 +685,15 @@ async function downloadStandard(ytDlpBin, url, jobId, isPlaylist, isAutomix, pla
   const finalArgs = opts.video ? withYT403Workarounds(args, { stripCookies: true }) : args;
 
   return new Promise((resolve, reject) => {
-    execFile(ytDlpBin, finalArgs, { maxBuffer: 1024 * 1024 * 1024 }, (error, stdout, stderr) => {
+    const child = execFile(ytDlpBin, finalArgs, { maxBuffer: 1024 * 1024 * 1024 }, (error, stdout, stderr) => {
       if (error) {
+        if (error.killed || error.signal === 'SIGTERM' || error.signal === 'SIGKILL') {
+          return reject(new Error('CANCELED'));
+        }
+        const body = (stderr || stdout || "");
+        if (/terminated|killed|aborted|SIGTERM|SIGKILL/i.test(body)) {
+          return reject(new Error('CANCELED'));
+        }
         const errorTail = (stderr || "").split("\n").slice(-20).join("\n");
         return reject(new Error(`yt-dlp hatası: ${error.code}\n${errorTail}`));
       }
@@ -702,6 +717,7 @@ async function downloadStandard(ytDlpBin, url, jobId, isPlaylist, isAutomix, pla
         }
       }
     });
+    try { registerJobProcess(jobId, child); } catch {}
   });
 }
 

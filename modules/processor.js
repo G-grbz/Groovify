@@ -3,7 +3,7 @@ import fs from "fs";
 import archiver from "archiver";
 import { resolveId3StrictForYouTube } from "./tags.js";
 import { resolveMarket } from "./market.js";
-import { jobs } from "./store.js";
+import { jobs, registerJobProcess, killJobProcesses } from "./store.js";
 import { sendError, sanitizeFilename, toNFC } from "./utils.js";
 import { processYouTubeVideoJob } from "./video.js";
 import { isYouTubeAutomix, fetchYtMetadata, downloadYouTubeVideo, buildEntriesMap, parsePlaylistIndexFromPath } from "./yt.js";
@@ -33,7 +33,7 @@ export async function processJob(jobId, inputPath, format, bitrate) {
     if (format === "mp4" && job.metadata?.source === "youtube") {
       await processYouTubeVideoJob(job, { OUTPUT_DIR, TEMP_DIR });
       try {
-        if (Array.isArray(job.resultPath)) {
+        if (Array.isArray(job.resultPath) && job.resultPath.length > 1 && !job.clientBatch) {
           const titleHint = job.metadata?.frozenTitle ||
                             job.metadata?.extracted?.title ||
                             job.metadata?.extracted?.playlist_title ||
@@ -68,6 +68,7 @@ export async function processJob(jobId, inputPath, format, bitrate) {
         (progress) => {
           job.downloadProgress = 20 + (progress * 0.8);
           job.progress = Math.floor((job.downloadProgress + job.convertProgress) / 2);
+          if (job.canceled) throw new Error("CANCELED");
         },
         {
           video: (format === "mp4"),
@@ -132,20 +133,28 @@ export async function processJob(jobId, inputPath, format, bitrate) {
               const cur = (progress / 100) * (100 / sorted.length);
               job.convertProgress = Math.floor(fileProgress + cur);
               job.progress = Math.floor((job.downloadProgress + job.convertProgress) / 2);
+              if (job.canceled) throw new Error("CANCELED");
             },
             fileMeta, itemCover, (format === "mp4"),
-            OUTPUT_DIR, TEMP_DIR
+            OUTPUT_DIR, TEMP_DIR,
+            { onProcess: (child) => { try { registerJobProcess(jobId, child); } catch {} } }
           );
         }
         results.push(r);
         job.playlist.done = i + 1;
       }
 
-      job.resultPath = results;
-      try {
-        const zipTitle = job.metadata.spotifyTitle || "Spotify Playlist";
-        job.zipPath = await makeZipFromOutputs(jobId, results, zipTitle);
-      } catch(e){}
+      if (results.length === 1) {
+        job.resultPath = results[0]?.outputPath || null;
+      } else {
+        job.resultPath = results;
+        if (!job.clientBatch) {
+          try {
+            const zipTitle = job.metadata.spotifyTitle || "Spotify Playlist";
+            job.zipPath = await makeZipFromOutputs(jobId, results, zipTitle);
+          } catch(e){}
+        }
+      }
 
       job.status = "completed";
       job.progress = 100;
@@ -212,6 +221,7 @@ export async function processJob(jobId, inputPath, format, bitrate) {
           (progress) => {
             job.downloadProgress = 10 + (progress * 0.9);
             job.progress = Math.floor((job.downloadProgress + job.convertProgress) / 2);
+            if (job.canceled) throw new Error("CANCELED");
           },
         {
           video: (format === "mp4"),
@@ -322,6 +332,7 @@ export async function processJob(jobId, inputPath, format, bitrate) {
             const fileProgress = (i / sorted.length) * 100;
             job.convertProgress = Math.floor(fileProgress + (100 / sorted.length));
             job.progress = Math.floor((job.downloadProgress + job.convertProgress) / 2);
+            if (job.canceled) throw new Error("CANCELED");
           } else {
             r = await convertMedia(
               filePath, format, bitrate, `${jobId}_${i}`,
@@ -332,18 +343,25 @@ export async function processJob(jobId, inputPath, format, bitrate) {
                 job.progress = Math.floor((job.downloadProgress + job.convertProgress) / 2);
               },
               fileMeta, itemCover, (format === "mp4"),
-              OUTPUT_DIR, TEMP_DIR
+              OUTPUT_DIR, TEMP_DIR,
+              { onProcess: (child) => { try { registerJobProcess(jobId, child); } catch {} } }
             );
           }
           results.push(r);
           job.playlist.done = i + 1;
         }
 
-        job.resultPath = results;
-        try {
-          const zipTitle = ytMeta?.title || ytMeta?.playlist_title || (isAutomix ? "YouTube Automix" : "Playlist");
-          job.zipPath = await makeZipFromOutputs(jobId, results, zipTitle);
-        } catch(e){}
+        if (results.length === 1) {
+          job.resultPath = results[0]?.outputPath || null;
+        } else {
+          job.resultPath = results;
+          if (!job.clientBatch) {
+            try {
+              const zipTitle = ytMeta?.title || ytMeta?.playlist_title || (isAutomix ? "YouTube Automix" : "Playlist");
+              job.zipPath = await makeZipFromOutputs(jobId, results, zipTitle);
+            } catch(e){}
+          }
+        }
 
         job.status = "completed";
         job.progress = 100;
@@ -365,6 +383,7 @@ export async function processJob(jobId, inputPath, format, bitrate) {
         (progress) => {
           job.downloadProgress = progress;
           job.progress = Math.floor((job.downloadProgress + job.convertProgress) / 2);
+          if (job.canceled) throw new Error("CANCELED");
         },
         {
           video: (format === "mp4"),
@@ -392,13 +411,15 @@ export async function processJob(jobId, inputPath, format, bitrate) {
           (p)=>{
             job.convertProgress = Math.floor(p);
             job.progress = Math.floor((job.downloadProgress + job.convertProgress) / 2);
+            if (job.canceled) throw new Error("CANCELED");
           },
           {
             ...(job.metadata.extracted || {}),
             __maxHeight: (format === "mp4") ? qualityToHeight(bitrate) : undefined
           },
           coverPath, isVideo,
-          OUTPUT_DIR, TEMP_DIR
+          OUTPUT_DIR, TEMP_DIR,
+          { onProcess: (child) => { try { registerJobProcess(jobId, child); } catch {} } }
         );
 
     job.resultPath = r.outputPath;
@@ -411,11 +432,20 @@ export async function processJob(jobId, inputPath, format, bitrate) {
   } catch (error) {
     const job = jobs.get(jobId);
     if (job) {
-      job.status = "error";
-      job.error = error.message;
-      job.currentPhase = "error";
+      if (error && String(error.message).toUpperCase() === "CANCELED") {
+        job.status = "canceled";
+        job.error = null;
+        job.currentPhase = "canceled";
+      } else {
+        job.status = "error";
+        job.error = error.message;
+        job.currentPhase = "error";
+      }
     }
-    console.error("Job error:", error);
+    if (!error || String(error.message).toUpperCase() !== "CANCELED") {
+      console.error("Job error:", error);
+    }
+    try { killJobProcesses(jobId); } catch {}
     cleanupTempFiles(jobId, inputPath);
   }
 }

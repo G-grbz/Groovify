@@ -6,7 +6,7 @@ import crypto from "crypto";
 const router = express.Router();
 const ENV_PATH = path.resolve(process.cwd(), ".env");
 const APP_SECRET = process.env.APP_SECRET || "dev-secret";
-const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || "";
+let ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || "";
 const ALLOWED_KEYS = [
   "SPOTIFY_CLIENT_ID",
   "SPOTIFY_CLIENT_SECRET",
@@ -74,10 +74,10 @@ function parseEnv() {
   return m;
 }
 
-function writeEnv(updates) {
+function writeEnv(updates, extraAllowed = []) {
   const envMap = parseEnv();
   for (const [k, v] of Object.entries(updates)) {
-    if (!ALLOWED_KEYS.includes(k)) continue;
+    if (!(ALLOWED_KEYS.includes(k) || extraAllowed.includes(k))) continue;
     if (v === "" || v === null || typeof v === "undefined") continue;
     envMap.set(k, String(v));
   }
@@ -153,6 +153,65 @@ router.post("/settings", authMiddleware, express.json(), (req, res) => {
     process.env[k] = v;
   }
   res.json({ ok: true, appliedInMemory: true });
+});
+
+function verifyTokenRaw(token) {
+  if (!token || typeof token !== "string" || !token.includes(".")) return null;
+  const [payload, mac] = token.split(".");
+  const expected = crypto.createHmac("sha256", APP_SECRET).update(payload).digest("base64url");
+  const macBuf = Buffer.from(mac || "", "utf8");
+  const expBuf = Buffer.from(expected, "utf8");
+  if (macBuf.length !== expBuf.length) return null;
+  if (!crypto.timingSafeEqual(macBuf, expBuf)) return null;
+  let obj = null;
+  try { obj = JSON.parse(Buffer.from(payload, "base64url").toString("utf8")); } catch {}
+  if (!obj) return null;
+  if (Date.now() > (obj.iat || 0) + 24*60*60*1000) return null;
+  return obj;
+}
+
+function getTokenFromReq(req) {
+  const h = req.get("authorization") || "";
+  if (h.startsWith("Bearer ")) return h.slice(7);
+  if (req.query?.token) return String(req.query.token);
+  return null;
+}
+
+export function requireAuth(req, res, next) {
+  const tok = getTokenFromReq(req);
+  const ok = verifyTokenRaw(tok);
+  if (!ok) return res.status(401).json({ error: { code: "UNAUTHORIZED", message: "Yetkisiz" } });
+  next();
+}
+
+router.post("/auth/change-password", authMiddleware, express.json(), (req, res) => {
+  const { oldPassword, newPassword, newPassword2 } = req.body || {};
+  const fail = (code, message) =>
+    res.status(400).json({ error: { code, message } });
+
+  if (!oldPassword || !newPassword || !newPassword2) {
+    return fail("FIELDS_REQUIRED", "Tüm alanlar zorunludur.");
+  }
+  if (newPassword !== newPassword2) {
+    return fail("PASSWORD_MISMATCH", "Yeni şifreler eşleşmiyor.");
+  }
+  if (String(newPassword).length < 6) {
+    return fail("PASSWORD_TOO_SHORT", "Yeni şifre en az 6 karakter olmalıdır.");
+  }
+
+  const current = process.env.ADMIN_PASSWORD || ADMIN_PASSWORD || "";
+  if (current && oldPassword !== current) {
+    return res.status(401).json({ error: { code: "BAD_PASSWORD", message: "Eski şifre hatalı." } });
+  }
+
+  try {
+    writeEnv({ ADMIN_PASSWORD: newPassword }, ["ADMIN_PASSWORD"]);
+    process.env.ADMIN_PASSWORD = newPassword;
+    ADMIN_PASSWORD = newPassword;
+    return res.json({ ok: true, logout: true });
+  } catch (e) {
+    return res.status(500).json({ error: { code: "PASSWORD_SAVE_FAILED", message: e.message || "Kaydedilemedi." } });
+  }
 });
 
 export default router;

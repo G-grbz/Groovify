@@ -3,14 +3,13 @@ import path from "path";
 import fs from "fs";
 import crypto from "crypto";
 import multer from "multer";
-
 import { sendOk, sendError, ERR, isDirectMediaUrl } from "../modules/utils.js";
-import { jobs, spotifyMapTasks } from "../modules/store.js";
+import { jobs, spotifyMapTasks, killJobProcesses  } from "../modules/store.js";
 import { processJob } from "../modules/processor.js";
 import { isSpotifyUrl, resolveSpotifyUrl } from "../modules/spotify.js";
 import { idsToMusicUrls, searchYtmBestId } from "../modules/sp.js";
 import { resolveMarket } from "../modules/market.js";
-
+import { requireAuth } from "../modules/settings.js";
 import {
   isYouTubeUrl,
   isYouTubePlaylist,
@@ -68,13 +67,31 @@ router.get("/api/stream/:id", (req, res) => {
 
   const interval = setInterval(() => {
     sendUpdate();
-    if (job.status === "completed" || job.status === "error") {
+    if (job.status === "completed" || job.status === "error" || job.status === "canceled") {
       clearInterval(interval);
       res.end();
     }
   }, 1000);
 
   req.on("close", () => clearInterval(interval));
+});
+
+router.post("/api/jobs/:id/cancel", (req, res) => {
+  const id = req.params.id;
+  const job = jobs.get(id);
+  if (!job) return sendError(res, ERR.JOB_NOT_FOUND, "Job not found", 404);
+
+  if (job.status === "completed" || job.status === "error" || job.status === "canceled") {
+    return sendOk(res, { id, status: job.status });
+  }
+
+  job.canceled = true;
+  job.status = "canceled";
+  job.currentPhase = "canceled";
+  job.error = null;
+  try { killJobProcesses(id); } catch {}
+
+  return sendOk(res, { id, status: "canceled" });
 });
 
 router.post("/api/jobs", upload.single("file"), async (req, res) => {
@@ -331,5 +348,86 @@ router.post("/api/playlist/preview", async (req, res) => {
   }
 });
 
+router.get("/api/jobs", requireAuth, (req, res) => {
+  try {
+    const status = (req.query.status || "active").toLowerCase();
+    const all = Array.from(jobs.values());
+    const pick = (j) => ({
+      id: j.id,
+      status: j.status,
+      progress: j.progress,
+      downloadProgress: j.downloadProgress ?? 0,
+      convertProgress: j.convertProgress ?? 0,
+      currentPhase: j.currentPhase || "queued",
+      format: j.format,
+      bitrate: j.bitrate,
+      createdAt: j.createdAt,
+      resultPath: j.resultPath || null,
+      zipPath: j.zipPath || null,
+      playlist: j.playlist || null,
+      metadata: {
+        source: j.metadata?.source,
+        isPlaylist: !!j.metadata?.isPlaylist,
+        isAutomix: !!j.metadata?.isAutomix,
+        frozenTitle: j.metadata?.frozenTitle || null,
+        extracted: j.metadata?.extracted || null,
+        spotifyTitle: j.metadata?.spotifyTitle || null,
+        originalName: j.metadata?.originalName || null,
+        frozenEntries: Array.isArray(j.metadata?.frozenEntries)
+        ? j.metadata.frozenEntries.map(e => ({ index: e.index, title: e.title })).slice(0, 500)
+        : null,
+      },
+    });
+    let items = all.map(pick);
+    if (status === "active")      items = items.filter(j => j.status!=="completed" && j.status!=="error");
+    else if (status === "error")  items = items.filter(j => j.status==="error");
+    else if (status === "completed") items = items.filter(j => j.status==="completed");
+    items.sort((a,b)=> new Date(b.createdAt)-new Date(a.createdAt));
+    res.json({ items });
+  } catch (e) {
+    res.status(500).json({ error:{ code:"LIST_FAIL", message:e.message || "list failed" }});
+  }
+});
+
+router.get("/api/stream", requireAuth, (req, res) => {
+  res.writeHead(200, {
+    "Content-Type": "text/event-stream",
+    "Cache-Control": "no-cache, no-transform",
+    Connection: "keep-alive",
+    "X-Accel-Buffering": "no",
+  });
+  const payload = () => {
+    const items = Array.from(jobs.values()).map(j => ({
+      id: j.id,
+      status: j.status,
+      progress: j.progress,
+      downloadProgress: j.downloadProgress ?? 0,
+      convertProgress: j.convertProgress ?? 0,
+      currentPhase: j.currentPhase || "queued",
+      format: j.format,
+      bitrate: j.bitrate,
+      resultPath: j.resultPath || null,
+      zipPath: j.zipPath || null,
+      createdAt: j.createdAt,
+      playlist: j.playlist || null,
+      metadata: {
+        source: j.metadata?.source,
+        isPlaylist: !!j.metadata?.isPlaylist,
+        isAutomix: !!j.metadata?.isAutomix,
+        frozenTitle: j.metadata?.frozenTitle || null,
+        extracted: j.metadata?.extracted || null,
+        spotifyTitle: j.metadata?.spotifyTitle || null,
+        originalName: j.metadata?.originalName || null,
+        frozenEntries: Array.isArray(j.metadata?.frozenEntries)
+         ? j.metadata.frozenEntries.map(e => ({ index: e.index, title: e.title })).slice(0, 500)
+         : null,
+      },
+    }));
+    return `data: ${JSON.stringify({ items })}\n\n`;
+  };
+  res.write(`: ping\n\n`);
+  const iv = setInterval(()=>{ try{ res.write(payload()); }catch{} }, 1000);
+  req.on("close", ()=> clearInterval(iv));
+});
 
 export default router;

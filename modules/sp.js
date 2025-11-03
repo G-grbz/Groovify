@@ -2,6 +2,7 @@ import fs from "fs";
 import path from "path";
 import { execFile } from "child_process";
 import { runYtJson, resolveYtDlp, withYT403Workarounds } from "./yt.js";
+import { registerJobProcess } from "./store.js";
 import crypto from "crypto";
 
 export function makeMapId(){ return crypto.randomBytes(8).toString("hex"); }
@@ -27,14 +28,16 @@ function getYtDlpCommonArgs(){
   return base;
 }
 
-export async function mapSpotifyToYtm(sp, onUpdate, { concurrency=3, onLog=null }={}) {
+export async function mapSpotifyToYtm(sp, onUpdate, { concurrency=3, onLog=null, shouldCancel=null }={}){
   let i=0, running=0; const results=new Array(sp.items.length);
   return new Promise((resolve)=>{
     const kick = ()=>{
+      if (shouldCancel && shouldCancel()) { return resolve(results); }
       while (running < concurrency && i < sp.items.length){
         const idx = i++; running++;
         (async ()=>{
           const it = sp.items[idx];
+          if (shouldCancel && shouldCancel()) { results[idx] = null; return; }
           if (onLog) onLog({ logKey: 'log.searchingTrack', logVars: { artist: it.artist, title: it.title }, fallback: `🔍 Aranıyor: ${it.artist} - ${it.title}` });
           let vid=null; try{ vid = await searchYtmBestId(it.artist, it.title); if (onLog && vid) onLog({ logKey: 'log.foundTrack', logVars: { artist: it.artist, title: it.title }, fallback: `✅ Bulundu: ${it.artist} - ${it.title}` });
             else if (onLog) onLog({ logKey: 'log.notFoundTrack', logVars: { artist: it.artist, title: it.title }, fallback: `❌ Bulunamadı: ${it.artist} - ${it.title}` });
@@ -43,7 +46,11 @@ export async function mapSpotifyToYtm(sp, onUpdate, { concurrency=3, onLog=null 
           }
           const item={ index: idx+1, id: vid||null, title: it.title, uploader: it.artist, duration:null, duration_string:null, webpage_url: vid ? (process.env.YT_USE_MUSIC !== "0" ? `https://music.youtube.com/watch?v=${vid}` : `https://www.youtube.com/watch?v=${vid}`) : "", thumbnail:null };
           results[idx]=item; onUpdate(idx, item);
-        })().finally(()=>{ running--; if (i >= sp.items.length && running===0) resolve(results); else kick(); });
+        })().finally(()=>{
+          running--;
+          if (shouldCancel && shouldCancel()) return resolve(results);
+          if (i >= sp.items.length && running===0) resolve(results); else kick();
+        });
       }
     };
     kick();
@@ -145,7 +152,7 @@ export async function downloadSingleYouTubeVideo(url, fileId, downloadDir) {
   let finalArgs = withYT403Workarounds(args, { stripCookies });
 
   return new Promise((resolve, reject) => {
-    execFile(YTDLP_BIN, finalArgs, { maxBuffer: 1024 * 1024 * 1024 }, (err, _stdout, stderr) => {
+    const child = execFile(YTDLP_BIN, finalArgs, { maxBuffer: 1024 * 1024 * 1024 }, (err, _stdout, stderr) => {
       if (!err) {
         try {
           const files = fs.readdirSync(downloadDir)
@@ -168,7 +175,7 @@ export async function downloadSingleYouTubeVideo(url, fileId, downloadDir) {
         if (idxExtr >= 0 && retryArgs[idxExtr+1]) {
           retryArgs[idxExtr+1] = 'youtube:player_client=android,web';
         }
-        return execFile(YTDLP_BIN, retryArgs, { maxBuffer: 1024 * 1024 * 1024 }, (err2, _so2, se2) => {
+        const child2 = execFile(YTDLP_BIN, retryArgs, { maxBuffer: 1024 * 1024 * 1024 }, (err2, _so2, se2) => {
           if (!err2) {
             try {
               const files = fs.readdirSync(downloadDir)
@@ -180,15 +187,17 @@ export async function downloadSingleYouTubeVideo(url, fileId, downloadDir) {
           const tail2 = String(se2 || "").split("\n").slice(-10).join("\n");
           return reject(new Error(`yt-dlp hatası (fallback denemesi): ${err2.code}\n${tail2}`));
         });
+        try { registerJobProcess(String(fileId).split("_")[0], child2); } catch {}
       }
 
       const tail = stderrStr.split("\n").slice(-10).join("\n");
       return reject(new Error(`yt-dlp hatası: ${err.code}\n${tail}`));
     });
+    try { registerJobProcess(String(fileId).split("_")[0], child); } catch {}
   });
 }
 
-export function createDownloadQueue(jobId, { concurrency = 4, onProgress, onLog } = {}) {
+export function createDownloadQueue(jobId, { concurrency = 4, onProgress, onLog, shouldCancel } = {}) {
   const TEMP_DIR = path.resolve(process.cwd(), "temp");
   const downloadDir = path.join(TEMP_DIR, jobId);
   fs.mkdirSync(downloadDir, { recursive: true });
@@ -202,6 +211,11 @@ export function createDownloadQueue(jobId, { concurrency = 4, onProgress, onLog 
 
   const pump = async () => {
     while (running < concurrency && q.length) {
+      if (shouldCancel && shouldCancel()) {
+        q.length = 0;
+        if (running === 0 && idleResolve) idleResolve();
+        return;
+      }
       const task = q.shift();
       running++;
       const { item, idx } = task;
@@ -217,6 +231,11 @@ export function createDownloadQueue(jobId, { concurrency = 4, onProgress, onLog 
         done++;
         if (onProgress) onProgress(done, total);
         running--;
+        if (shouldCancel && shouldCancel()) {
+          q.length = 0;
+          if (running === 0 && idleResolve) idleResolve();
+          return;
+        }
         if (q.length) pump();
         else if (ended && running === 0 && idleResolve) idleResolve();
       }

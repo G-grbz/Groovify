@@ -1,5 +1,3 @@
-# Dockerfile
-
 FROM node:20-alpine
 WORKDIR /usr/src/app
 
@@ -31,8 +29,8 @@ COPY . .
 ENV NODE_ENV=production \
     PORT=5174
 
-RUN mkdir -p uploads outputs temp && chown -R node:node /usr/src/app
-USER node
-EXPOSE 5174
+RUN mkdir -p uploads outputs temp \
+ && chmod -R 0775 /usr/src/app
 
+EXPOSE 5174
 CMD ["node", "app.js"]
