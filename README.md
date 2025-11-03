@@ -1,6 +1,7 @@
 # 🎵 Groovify – YouTube / Spotify Downloader & Converter
 
-<img width="1727" height="926" alt="groovify" src="https://github.com/user-attachments/assets/06cc8078-592e-4741-9025-66ab0f508e99" />
+<img width="1897" height="972" alt="1" src="https://github.com/user-attachments/assets/d7544c0d-9fe9-4044-91bb-92af5a28240b" />
+
 
 
 # 🇬🇧 English
