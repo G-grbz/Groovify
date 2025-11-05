@@ -1,4 +1,4 @@
-# 🎵 Groovify – YouTube / Spotify Downloader & Converter
+# 🎵 Gharmonize – YouTube / Spotify Downloader & Converter
 
 <img width="1897" height="972" alt="1" src="https://github.com/user-attachments/assets/d7544c0d-9fe9-4044-91bb-92af5a28240b" />
 
@@ -21,7 +21,7 @@
 
 ## Overview
 
-**Groovify** is a Node.js + ffmpeg powered server that can:
+**Gharmonize** is a Node.js + ffmpeg powered server that can:
 
 * Parse YouTube / YouTube Music links (single, playlist, automix)
 * Map Spotify tracks, playlists, and albums to YouTube and download
@@ -97,8 +97,8 @@ PORT=5174
 1. Clone the repository and navigate to the project directory:
 
    ```bash
-   git clone https://github.com/G-grbz/Groovify
-   cd Groovify
+   git clone https://github.com/G-grbz/Gharmonize
+   cd Gharmonize
    ```
 
 2. Create a `.env` file. (To manage environment settings via the UI, include `ADMIN_PASSWORD` and `APP_SECRET` fields. Generate `APP_SECRET` using the following command:)
@@ -128,8 +128,8 @@ PORT=5174
 1. Clone the repository and navigate to the project directory:
 
    ```bash
-   git clone https://github.com/G-grbz/Groovify
-   cd Groovify
+   git clone https://github.com/G-grbz/Gharmonize
+   cd Gharmonize
    ```
 
 2. Create a `.env` file. (To manage environment settings via the UI, include `ADMIN_PASSWORD` and `APP_SECRET` fields. Generate `APP_SECRET` using the following command:)
@@ -192,7 +192,7 @@ This software is provided “as is”, without warranty of any kind. Use it at y
 
 ## Genel Bakış
 
-**Groovify**, Node.js + ffmpeg tabanlı bir sunucudur ve:
+**Gharmonize**, Node.js + ffmpeg tabanlı bir sunucudur ve:
 
 * YouTube / YouTube Music bağlantılarını (tek video, oynatma listesi, automix) işler
 * Spotify parça, albüm ve oynatma listelerini YouTube’a eşleyip indirir
@@ -258,8 +258,8 @@ PORT=5174
 1. Repoyu indirin ve dizine geçin:
 
    ```bash
-   git clone https://github.com/G-grbz/Groovify
-   cd Groovify
+   git clone https://github.com/G-grbz/Gharmonize
+   cd Gharmonize
    ```
 
 2. `.env` dosyasını oluşturun. (UI üzerinden düzenleme yapabilmek için `ADMIN_PASSWORD` ve `APP_SECRET` alanlarını girin. `APP_SECRET` değerini oluşturmak için aşağıdaki komutu kullanabilirsiniz:)
@@ -289,8 +289,8 @@ PORT=5174
 1. Repoyu indirin ve dizine geçin:
 
    ```bash
-   git clone https://github.com/G-grbz/Groovify
-   cd Groovify
+   git clone https://github.com/G-grbz/Gharmonize
+   cd Gharmonize
    ```
 
 2. `.env` dosyasını oluşturun. (UI üzerinden düzenleme yapabilmek için `ADMIN_PASSWORD` ve `APP_SECRET` alanlarını girin. `APP_SECRET` değerini oluşturmak için aşağıdaki komutu kullanabilirsiniz:)
