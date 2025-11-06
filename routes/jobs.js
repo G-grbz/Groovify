@@ -422,6 +422,8 @@ router.get("/api/jobs", requireAuth, (req, res) => {
       resultPath: j.resultPath || null,
       zipPath: j.zipPath || null,
       playlist: j.playlist || null,
+      skippedCount: j.skippedCount || 0,
+      errorsCount: j.errorsCount || 0,
       lastLog: j.lastLog || null,
       metadata: {
         source: j.metadata?.source,
@@ -429,17 +431,19 @@ router.get("/api/jobs", requireAuth, (req, res) => {
         isAutomix: !!j.metadata?.isAutomix,
         frozenTitle: j.metadata?.frozenTitle || null,
         extracted: j.metadata?.extracted || null,
+        skipStats: j.metadata?.skipStats || { skippedCount: 0, errorsCount: 0 },
         spotifyTitle: j.metadata?.spotifyTitle || null,
         originalName: j.metadata?.originalName || null,
         includeLyrics: !!j.metadata?.includeLyrics,
         lyricsStats: j.metadata?.lyricsStats || null,
         frozenEntries: Array.isArray(j.metadata?.frozenEntries)
-        ? j.metadata.frozenEntries.map(e => ({
-            index: e.index,
-            title: e.title,
-            hasLyrics: false
-          })).slice(0, 500)
-        : null,
+          ? j.metadata.frozenEntries.map(e => ({
+              index: e.index,
+              title: e.title,
+              hasLyrics: !!e.hasLyrics
+            })).slice(0, 500)
+          : null,
+        lyricsStats: j.metadata?.lyricsStats || { found: 0, notFound: 0 },
       },
     });
     let items = all.map(pick);
@@ -473,6 +477,8 @@ router.get("/api/stream", requireAuth, (req, res) => {
       resultPath: j.resultPath || null,
       zipPath: j.zipPath || null,
       createdAt: j.createdAt,
+      skippedCount: j.skippedCount || 0,
+      errorsCount: j.errorsCount || 0,
       playlist: j.playlist || null,
       lastLog: j.lastLog || null,
       metadata: {
@@ -481,13 +487,19 @@ router.get("/api/stream", requireAuth, (req, res) => {
         isAutomix: !!j.metadata?.isAutomix,
         frozenTitle: j.metadata?.frozenTitle || null,
         extracted: j.metadata?.extracted || null,
+        skipStats: j.metadata?.skipStats || { skippedCount: 0, errorsCount: 0 },
         spotifyTitle: j.metadata?.spotifyTitle || null,
         originalName: j.metadata?.originalName || null,
         includeLyrics: !!j.metadata?.includeLyrics,
         lyricsStats: j.metadata?.lyricsStats || null,
         frozenEntries: Array.isArray(j.metadata?.frozenEntries)
-         ? j.metadata.frozenEntries.map(e => ({ index: e.index, title: e.title })).slice(0, 500)
-         : null,
+          ? j.metadata.frozenEntries.map(e => ({
+              index: e.index,
+              title: e.title,
+              hasLyrics: !!e.hasLyrics
+            })).slice(0, 500)
+          : null,
+        lyricsStats: j.metadata?.lyricsStats || { found: 0, notFound: 0 },
       },
     }));
     return `data: ${JSON.stringify({ items })}\n\n`;

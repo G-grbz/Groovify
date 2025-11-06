@@ -1,4 +1,6 @@
 {
+  "ui.current": "Traité",
+  "jobs.skipped": "Omission",
   "ui.processing": "Traitement en cours...",
   "ui.loading": "Chargement...",
   "notif.allTracksQueued": "Toutes les pistes ont été ajoutées à la file d’attente",

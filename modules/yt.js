@@ -481,6 +481,7 @@ export async function downloadYouTubeVideo(
 }
 
 async function downloadSelectedIds(ytDlpBin, selectedIds, jobId, tempDir, progressCallback, opts = {}, ctrl = {}) {
+  const seenSkip = new Set();
   const listFile = path.join(tempDir, `${jobId}.urls.txt`);
   const urls = idsToWatchUrls(selectedIds);
 
@@ -499,7 +500,17 @@ async function downloadSelectedIds(ytDlpBin, selectedIds, jobId, tempDir, progre
   let skippedCount = 0;
   let errorsCount = 0;
 
+  const updateSkipStats = () => {
+    if (opts.onSkipUpdate) {
+      opts.onSkipUpdate({ skippedCount, errorsCount });
+    }
+  };
+
   const bumpSkip = (line) => {
+    if (/^\s*SKIP_(SUMMARY|HINT):/i.test(line)) return;
+    const key = line.replace(/\s+/g, " ").trim();
+    if (seenSkip.has(key)) return;
+    seenSkip.add(key);
     if (SKIP_RE.test(line)) {
       skippedCount++;
       emitEvent(progressCallback, opts, {
@@ -507,12 +518,15 @@ async function downloadSelectedIds(ytDlpBin, selectedIds, jobId, tempDir, progre
         skippedCount,
         errorsCount,
         lastLogKey: "log.skippedItem",
-        raw: line
+        raw: line,
+        jobId: jobId
       });
+      updateSkipStats();
       try { process.stderr.write(`\nSKIP_HINT: ${line.trim()}\n`); } catch {}
-    }
-    if (ERROR_WORD.test(line)) {
+      return;
+      } else if (ERROR_WORD.test(line)) {
       errorsCount++;
+      updateSkipStats();
       try { process.stderr.write(`\nSKIP_HINT: ${line.trim()}\n`); } catch {}
     }
   };
@@ -617,6 +631,7 @@ async function downloadSelectedIds(ytDlpBin, selectedIds, jobId, tempDir, progre
 
     child.on('close', (code, signal) => {
       try { process.stderr.write(`\nSKIP_SUMMARY: skipped=${skippedCount} errors=${errorsCount}\n`); } catch {}
+      updateSkipStats();
       emitEvent(progressCallback, opts, {
         type: "summary",
         skippedCount,
@@ -631,10 +646,15 @@ async function downloadSelectedIds(ytDlpBin, selectedIds, jobId, tempDir, progre
         return reject(new Error('CANCELED'));
       }
       const files = getDownloadedFiles(playlistDir, true);
-      if (files.length > 0) {
-      if (progressCallback) progressCallback(100);
-        return resolve(files);
-      }
+  if (files.length > 0) {
+    const finalSkipped = Math.max(0, totalCount - files.length);
+     if (finalSkipped !== skippedCount) {
+       skippedCount = finalSkipped;
+       updateSkipStats();
+     }
+     if (progressCallback) progressCallback(100);
+     return resolve(files);
+  }
       const errorTail = String(stderrBuf).split("\n").slice(-20).join("\n");
       return reject(new Error(`yt-dlp hatası (selected-ids): ${code}\n${errorTail}`));
     });
@@ -653,6 +673,7 @@ async function downloadStandard(
   opts = {},
   ctrl = {}
 ) {
+  const seenSkip = new Set();
   const H = (opts.maxHeight && Number.isFinite(opts.maxHeight)) ? opts.maxHeight : 1080;
   const outputTemplate = path.join(
     tempDir,
@@ -666,6 +687,15 @@ async function downloadStandard(
     if (fs.existsSync(playlistDir)) {
       const files = getDownloadedFiles(playlistDir, true);
       if (files.length > 0) return files;
+      const declaredTotal =
+     (Array.isArray(playlistItems) && playlistItems.length)
+       ? playlistItems.length
+       : (seenTotal || files.length);
+   const finalSkipped = Math.max(0, declaredTotal - files.length);
+   if (finalSkipped !== skippedCount) {
+     skippedCount = finalSkipped;
+     updateSkipStats();
+   }
     }
   } else {
     const existingSingle = getDownloadedFiles(tempDir, false, jobId);
@@ -776,12 +806,22 @@ async function downloadStandard(
     let seenTotal = null;
     let seenIndex = 0;
     let curFilePct = 0;
+    let currentFileIndex = 0;
+    let downloadedFiles = 0;
+
+    const updateSkipStats = () => {
+      if (opts.onSkipUpdate) {
+        opts.onSkipUpdate({ skippedCount, errorsCount });
+      }
+    };
 
     const bumpProgress = () => {
       if (!progressCallback) return;
       if (isPlaylist || isAutomix) {
         const total = seenTotal || (Array.isArray(playlistItems) && playlistItems.length) || 100;
-        const overall = Math.max(0, Math.min(100, ((seenIndex + curFilePct / 100) / total) * 100));
+        const fileProgress = currentFileIndex > 0 ? ((currentFileIndex - 1) / total) * 100 : 0;
+        const currentFileProgress = (curFilePct / 100) * (100 / total);
+        const overall = Math.max(0, Math.min(100, fileProgress + currentFileProgress));
         progressCallback(overall);
       } else {
         progressCallback(Math.max(0, Math.min(100, curFilePct)));
@@ -790,8 +830,14 @@ async function downloadStandard(
 
     const pctRe = /(\d+(?:\.\d+)?)%/;
     const itemRe = /Downloading item\s+(\d+)\s+of\s+(\d+)/i;
+    const destinationRe = /\[download\]\s+Destination:\s*(.+)/i;
+    const downloadCompleteRe = /\[download\]\s+(\d+)% of\s+~?\s*(\d+(?:\.\d+)?)(?:\w+)?\s+in\s+/i;
 
     const bumpSkipStd = (line) => {
+    if (/^\s*SKIP_(SUMMARY|HINT):/i.test(line)) return;
+    const key = line.replace(/\s+/g, " ").trim();
+    if (seenSkip.has(key)) return;
+    seenSkip.add(key);
       if (SKIP_RE.test(line)) {
         skippedCount++;
         emitEvent(progressCallback, opts, {
@@ -799,12 +845,14 @@ async function downloadStandard(
           skippedCount,
           errorsCount,
           lastLogKey: "log.skippedItem",
-          raw: line
+          raw: line,
+          jobId: jobId
         });
-        try { process.stderr.write(`\nSKIP_HINT: ${line.trim()}\n`); } catch {}
-      }
-      if (ERROR_WORD.test(line)) {
+        updateSkipStats();
+        return;
+        } else if (ERROR_WORD.test(line)) {
         errorsCount++;
+        updateSkipStats();
         try { process.stderr.write(`\nSKIP_HINT: ${line.trim()}\n`); } catch {}
       }
     };
@@ -824,11 +872,28 @@ async function downloadStandard(
         const tot = parseInt(m2[2], 10);
         if (Number.isFinite(tot) && tot > 0) seenTotal = tot;
         if (Number.isFinite(idx)) {
+          currentFileIndex = idx;
           seenIndex = Math.max(seenIndex, idx - 1);
           curFilePct = 0;
           bumpProgress();
         }
       }
+
+      if (destinationRe.test(line)) {
+       downloadedFiles++;
+       currentFileIndex = downloadedFiles;
+       curFilePct = 100;
+       bumpProgress();
+     }
+
+     if (downloadCompleteRe.test(line)) {
+       const m = line.match(downloadCompleteRe);
+       if (m) {
+         curFilePct = parseFloat(m[1]) || 0;
+         bumpProgress();
+       }
+     }
+
       if (/\[download\]\s+Destination:/i.test(line)) {
         if (isPlaylist || isAutomix) {
           seenIndex += 1;
@@ -854,6 +919,7 @@ async function downloadStandard(
     child.on("close", (code, signal) => {
       clearInterval(cancelTick);
       try { process.stderr.write(`\nSKIP_SUMMARY: skipped=${skippedCount} errors=${errorsCount}\n`); } catch {}
+      updateSkipStats();
       emitEvent(progressCallback, opts, {
         type: "summary",
         skippedCount,
@@ -868,6 +934,15 @@ async function downloadStandard(
     const playlistDir = path.join(tempDir, jobId);
     const files = getDownloadedFiles(playlistDir, true);
     if (files.length > 0) {
+      const declaredTotal =
+     (Array.isArray(playlistItems) && playlistItems.length)
+       ? playlistItems.length
+       : (seenTotal || files.length);
+   const finalSkipped = Math.max(0, declaredTotal - files.length);
+   if (finalSkipped !== skippedCount) {
+     skippedCount = finalSkipped;
+     updateSkipStats();
+   }
       if (progressCallback) progressCallback(100);
       return resolve(files);
     }

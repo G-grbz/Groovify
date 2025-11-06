@@ -1,4 +1,6 @@
 {
+ "ui.current": "İşlenen",
+ "jobs.skipped": "Atlandı",
  "ui.processing": "İşleniyor...",
  "ui.loading": "Yükleniyor...",
  "notif.allTracksQueued": "Tüm parçalar kuyruğa eklendi",

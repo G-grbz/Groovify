@@ -88,9 +88,13 @@
         </form>
       </div>
     </div>
-
-    <div class="card" id="spotifyPreviewCard" style="display: none;">
-      <h2 data-i18n="section.spotifyPreview">🎵 Spotify Eşleştirme</h2>
+    <div class="card collapsible-section" id="spotifyPreviewCard" style="display: none;">
+      <div class="collapsible-header" id="spotifyPreviewHeader">
+        <h2 data-i18n="section.spotifyPreview">🎵 Spotify Eşleştirme</h2>
+        <span class="toggle-arrow">▼</span>
+      </div>
+      <div class="collapsible-content" id="spotifyPreviewContent">
+        <div class="collapsible-inner">
       <div class="preview-meta">
         <span class="chip"><span data-i18n="chip.title">Başlık:</span> <strong id="spotifyTitle">-</strong></span>
         <span class="chip"><span data-i18n="chip.total">Toplam:</span> <strong id="spotifyTotal">0</strong></span>
@@ -110,11 +114,17 @@
       <div class="preview-list-container">
         <h3 data-i18n="section.matchedTracks">🎶 Eşleşen Parçalar</h3>
         <div class="preview-list" id="spotifyPreviewList"></div>
+        </div>
       </div>
     </div>
-
-    <div class="card" id="playlistPreviewCard" style="display: none;">
-      <h2 data-i18n="section.preview">🧾 Playlist Önizleme ve Seçim</h2>
+  </div>
+    <div class="card collapsible-section" id="playlistPreviewCard" style="display: none;">
+      <div class="collapsible-header" id="playlistPreviewHeader">
+        <h2 data-i18n="section.preview">🧾 Playlist Önizleme ve Seçim</h2>
+        <span class="toggle-arrow">▼</span>
+      </div>
+      <div class="collapsible-content" id="playlistPreviewContent">
+        <div class="collapsible-inner">
       <div class="preview-meta">
         <span class="chip"><span data-i18n="chip.title">Başlık:</span> <strong id="plTitle">-</strong></span>
         <span class="chip"><span data-i18n="chip.total">Toplam:</span> <strong id="plCount">0</strong></span>
@@ -142,18 +152,25 @@
         </select>
       </div>
       <div class="preview-list" id="previewList"></div>
+      </div>
     </div>
+  </div>
 
-    <div class="card">
-      <h2 data-i18n="section.jobs">📊 Aktif İşler</h2>
-      <div id="jobList">
-        <div class="job-item" id="job-empty">
-          <div class="jobs-empty-state">
-            <div class="jobs-empty-icon">🎵</div>
-            <h3 class="jobs-empty-title" data-i18n="jobsPanel.emptyActive">Henüz iş yok</h3>
-            <p class="jobs-empty-subtitle" data-i18n="jobs.emptySubtitle">Bir URL ekleyerek veya dosya yükleyerek dönüşüme başlayın</p>
-            <div class="jobs-empty-actions">
-              <button class="jobs-empty-action" onclick="focusUrlInput()" data-i18n="jobs.startWithUrl">URL ile Başla</button>
+    <div class="card collapsible-section">
+      <div class="collapsible-header" id="jobsHeader">
+        <h2 data-i18n="section.jobs">📊 Aktif İşler</h2>
+        <span class="toggle-arrow">▼</span>
+      </div>
+        <div class="collapsible-content" id="jobsContent">
+          <div class="collapsible-inner">
+              <div id="jobList">
+                <div class="job-item" id="job-empty">
+                      <div class="jobs-empty-state">
+                      <div class="jobs-empty-icon">🎵</div>
+                        <h3 class="jobs-empty-title" data-i18n="jobsPanel.emptyActive">Henüz iş yok</h3>
+                      <p class="jobs-empty-subtitle" data-i18n="jobs.emptySubtitle">Bir URL ekleyerek veya dosya yükleyerek dönüşüme başlayın</p>
+                    <div class="jobs-empty-actions">
+                  <button class="jobs-empty-action" onclick="focusUrlInput()" data-i18n="jobs.startWithUrl">URL ile Başla</button>
               <button class="jobs-empty-action jobs-empty-action--outline" onclick="focusFileInput()" data-i18n="section.file">Dosya Yükle</button>
             </div>
           </div>
@@ -161,6 +178,8 @@
       </div>
     </div>
   </div>
+</div>
+</div>
 
   <aside id="jobsPanel" class="jobs-panel" aria-hidden="true">
     <header class="jobs-panel__header">
@@ -172,7 +191,6 @@
       </div>
     </header>
     <div id="jobsList" class="jobs-list">
-      <!-- Boş durum için içerik -->
       <div class="jobs-panel__empty" id="jobsPanelEmpty">
         <div class="jobs-panel__empty-icon">🎵</div>
         <div class="jobs-panel__empty-title">Henüz iş yok</div>
@@ -189,6 +207,30 @@
 <script src="/i18n.js"></script>
   <script>
 
+  document.addEventListener('DOMContentLoaded', function() {
+      function setupCollapsible(headerId, contentId) {
+        const header = document.getElementById(headerId);
+        const content = document.getElementById(contentId);
+
+        if (header && content) {
+          header.addEventListener('click', function() {
+            header.classList.toggle('collapsed');
+            content.classList.toggle('collapsed');
+          });
+        }
+      }
+
+      setupCollapsible('spotifyPreviewHeader', 'spotifyPreviewContent');
+      setupCollapsible('playlistPreviewHeader', 'playlistPreviewContent');
+      setupCollapsible('jobsHeader', 'jobsContent');
+
+      const jobsHeader = document.getElementById('jobsHeader');
+      const jobsContent = document.getElementById('jobsContent');
+      if (jobsHeader && jobsContent) {
+        jobsHeader.classList.remove('collapsed');
+        jobsContent.classList.remove('collapsed');
+      }
+    });
 
   function focusUrlInput() {
       const urlInput = document.getElementById('urlInput');
@@ -361,8 +403,10 @@ const notificationManager = new NotificationManager();
       }
 
       computeSkipped(job) {
-      const direct = Number(job?.skippedCount ?? job?.metadata?.skippedCount ?? 0);
-      if (direct > 0) return direct;
+      const fromStats = Number(job?.metadata?.skipStats?.skippedCount);
+  if (Number.isFinite(fromStats) && fromStats >= 0) return fromStats;
+  const direct = Number(job?.skippedCount ?? job?.metadata?.skippedCount);
+  if (Number.isFinite(direct) && direct >= 0) return direct;
 
       if (Number.isFinite(job?.playlist?.skipped)) {
         return Number(job.playlist.skipped);
@@ -375,7 +419,7 @@ const notificationManager = new NotificationManager();
       if (job?.metadata?.isPlaylist && Array.isArray(job?.resultPath)) {
         const successful = job.resultPath.filter(r => r && r.outputPath && !r.error).length;
         const total = Number(job?.playlist?.total ?? job?.metadata?.frozenEntries?.length ?? successful);
-        return Math.max(0, total - successful);
+        return Math.max(0, Math.min(total, total - successful));
       }
 
       if (job?.stderr) {
@@ -1311,6 +1355,7 @@ const notificationManager = new NotificationManager();
       uiCurrentIndex(job) {
       const total = job.playlist?.total;
       const done  = job.playlist?.done;
+      const current = job.playlist?.current || done;
       if (Number.isFinite(total) && Number.isFinite(done) && total > 0) {
         return Math.min(Math.max(0, done || 0), Math.max(0, total - 1));
       }
@@ -1319,7 +1364,7 @@ const notificationManager = new NotificationManager();
 
     uiNowTitle(job) {
       if (job.metadata?.isPlaylist && Array.isArray(job.metadata?.frozenEntries) && job.metadata.frozenEntries.length) {
-        const i0 = this.uiCurrentIndex(job);
+        const i0 = job.playlist?.current || this.uiCurrentIndex(job);
         if (i0 !== null && job.metadata.frozenEntries[i0]) {
           const e = job.metadata.frozenEntries[i0];
           return `${e.index}. ${e.title}`;
@@ -1392,54 +1437,101 @@ const notificationManager = new NotificationManager();
 
     let phaseDetails = '';
     if (job.currentPhase) {
-      const phaseTexts = {
-        preparing: t('phase.preparing'),
-        downloading: t('phase.downloading'),
-        converting: t('phase.converting'),
-        completed: t('phase.completed'),
-        canceled: t('status.canceled'),
-        cancelled: t('status.canceled'),
-        error: t('phase.error')
-      };
+    const phaseTexts = {
+    preparing: t('phase.preparing'),
+    downloading: t('phase.downloading'),
+    converting: t('phase.converting'),
+    completed: t('phase.completed'),
+    canceled: t('status.canceled'),
+    cancelled: t('status.canceled'),
+    error: t('phase.error')
+  };
 
-      const currentPhaseText = phaseTexts[job.currentPhase] || job.currentPhase;
+  const currentPhaseText = phaseTexts[job.currentPhase] || job.currentPhase;
 
-      if (job.playlist && job.playlist.total) {
-        const downloaded = job.downloadProgress >= 100 ? job.playlist.total : Math.floor((job.downloadProgress / 100) * job.playlist.total);
-        const converted = job.convertProgress >= 100 ? job.playlist.total : Math.floor((job.convertProgress / 100) * job.playlist.total);
-
-        phaseDetails = `
-          <div class="phase-details">
-            <div class="phase-details__title">${currentPhaseText}</div>
-            <div class="phase-details__grid">
-              <span class="phase-details__item">
-                📥 ${t('ui.downloading')}:
-                <span class="phase-details__value">${downloaded}/${job.playlist.total}</span>
-              </span>
-              <span class="phase-details__item">
-                ⚡ ${t('ui.converting')}:
-                <span class="phase-details__value">${converted}/${job.playlist.total}</span>
-              </span>
-            </div>
-          </div>
-        `;
+  if (job.playlist && job.playlist.total) {
+    if (job.metadata?.source === 'spotify') {
+      let downloaded, converted;
+      if (job.currentPhase === 'downloading') {
+        downloaded = job.playlist.done || 0;
+        converted = 0;
+      } else if (job.currentPhase === 'converting') {
+        downloaded = job.playlist.total;
+        converted = job.playlist.done || 0;
       } else {
-        phaseDetails = `
-          <div class="phase-details">
-            <div class="phase-details__title">${currentPhaseText}</div>
-            <div class="phase-details__grid">
-              <span class="phase-details__item">
-                📥 ${t('ui.downloading')}:
-                <span class="phase-details__value">${Math.floor(job.downloadProgress || 0)}%</span>
-              </span>
-              <span class="phase-details__item">
-                ⚡ ${t('ui.converting')}:
-                <span class="phase-details__value">${Math.floor(job.convertProgress || 0)}%</span>
-              </span>
-            </div>
-          </div>
-        `;
+        downloaded = job.playlist.done || 0;
+        converted = job.playlist.done || 0;
       }
+
+      phaseDetails = `
+        <div class="phase-details">
+          <div class="phase-details__title">${currentPhaseText}</div>
+          <div class="phase-details__grid">
+            <span class="phase-details__item">
+              🎵 ${t('ui.current')}:
+              <span class="phase-details__value">${(job.playlist.current || job.playlist.done || 0) + 1}</span>
+            </span>
+            <span class="phase-details__item">
+              📥 ${t('ui.downloading')}:
+              <span class="phase-details__value">${downloaded}/${job.playlist.total}</span>
+            </span>
+            <span class="phase-details__item">
+              ⚡ ${t('ui.converting')}:
+              <span class="phase-details__value">${converted}/${job.playlist.total}</span>
+            </span>
+          </div>
+        </div>
+      `;
+    }
+    else {
+      let downloaded, converted;
+
+      if (job.counters && typeof job.counters.dlDone === 'number' && typeof job.counters.cvDone === 'number') {
+        downloaded = job.counters.dlDone;
+        converted = job.counters.cvDone;
+      } else {
+        downloaded = job.downloadProgress >= 100 ? job.playlist.total : Math.floor((job.downloadProgress / 100) * job.playlist.total);
+        converted = job.convertProgress >= 100 ? job.playlist.total : Math.floor((job.convertProgress / 100) * job.playlist.total);
+      }
+      const currentTrack = job.playlist.current !== undefined ? job.playlist.current + 1 : (downloaded + 1);
+
+      phaseDetails = `
+        <div class="phase-details">
+          <div class="phase-details__title">${currentPhaseText}</div>
+          <div class="phase-details__grid">
+            <span class="phase-details__item">
+              🎵 ${t('ui.current')}:
+              <span class="phase-details__value">${currentTrack}</span>
+            </span>
+            <span class="phase-details__item">
+              📥 ${t('ui.downloading')}:
+              <span class="phase-details__value">${downloaded}/${job.playlist.total}</span>
+            </span>
+            <span class="phase-details__item">
+              ⚡ ${t('ui.converting')}:
+              <span class="phase-details__value">${converted}/${job.playlist.total}</span>
+            </span>
+          </div>
+        </div>
+      `;
+    }
+  } else {
+    phaseDetails = `
+      <div class="phase-details" style="margin-top: 8px;">
+        <div class="phase-details__title" style="margin-bottom: 6px;">${currentPhaseText}</div>
+        <div class="phase-details__grid">
+          <span class="phase-details__item">
+            📥 ${t('ui.downloading')}:
+            <span class="phase-details__value">${Math.floor(job.downloadProgress || 0)}%</span>
+          </span>
+          <span class="phase-details__item">
+            ⚡ ${t('ui.converting')}:
+            <span class="phase-details__value">${Math.floor(job.convertProgress || 0)}%</span>
+          </span>
+        </div>
+      </div>
+    `;
+  }
     }
 
     let jobElement = document.getElementById(`job-${job.id}`);
@@ -1464,7 +1556,7 @@ const notificationManager = new NotificationManager();
 
     let jobTitle = job.metadata?.originalName || job.metadata?.source || '';
 
-    if (job.metadata.source === 'spotify') {
+    if (job.metadata?.source === 'spotify') {
       jobTitle = `🎵 ${job.metadata.spotifyTitle || t('ui.spotifyPlaylist')}`;
     }
     {
@@ -1480,8 +1572,8 @@ const notificationManager = new NotificationManager();
     }
 
     const skippedCount = this.computeSkipped(job);
-  const skippedKeywords = /(private|izin|skipp?ed|unavailable|atlan(?:d|an)|blocked|copyright|region|geo)/i;
-  const showSkippedBadge =
+    const skippedKeywords = /(private|izin|skipp?ed|unavailable|atlan(?:d|an)|blocked|copyright|region|geo)/i;
+    const showSkippedBadge =
     (skippedCount > 0) ||
     (job.lastLog && skippedKeywords.test(String(job.lastLog))) ||
     (job.lastLogKey && skippedKeywords.test(String(job.lastLogKey))) ||
@@ -1577,7 +1669,7 @@ const notificationManager = new NotificationManager();
 
       ${(() => {
         const nt = this.uiNowTitle(job);
-        return nt ? `<div class="muted" style="font-size:12px; margin: 6px 0;">▶️ <strong>${this.escapeHtml(nt)}</strong></div>` : '';
+        return nt ? `<div class="muted" style="font-size:12px; margin: 8px 0 4px 0;">▶️ <strong>${this.escapeHtml(nt)}</strong></div>` : '';
       })()}
 
       <div class="progress-bar">
@@ -2953,9 +3045,26 @@ const notificationManager = new NotificationManager();
 
         list.innerHTML = items.map(j=>{
           const p = prog(j);
-          const zip = j.zipPath ? `<a class="link" href="${j.zipPath}" download>${t('jobsPanel.downloadZip')}</a>` : '';
-          const one = (typeof j.resultPath === 'string') ? `<a class="link" href="${j.resultPath}" download>${t('jobsPanel.downloadFile')}</a>` : '';
-          const many = Array.isArray(j.resultPath) ? `<span class="link" style="opacity:.8" title="${t('jobsPanel.multipleOutputs')}">${t('jobsPanel.multiple')}</span>` : '';
+          let downloadLinks = '';
+
+        if (j.status === 'completed') {
+        if (typeof j.resultPath === 'string' && j.resultPath) {
+          downloadLinks = `<a class="link" href="${j.resultPath}" download>${t('jobsPanel.downloadFile')}</a>`;
+        }
+        else if (Array.isArray(j.resultPath)) {
+          const successfulResults = j.resultPath.filter(r => r.outputPath && !r.error);
+          if (successfulResults.length > 0) {
+            if (j.zipPath) {
+              downloadLinks = `<a class="link" href="${j.zipPath}" download>${t('jobsPanel.downloadZip')}</a>`;
+            } else {
+              downloadLinks = `<span class="link" style="opacity:.8" title="${t('jobsPanel.multipleOutputs')}">${t('jobsPanel.multiple')}</span>`;
+            }
+          }
+        }
+        else if (typeof j.resultPath === 'object' && j.resultPath?.outputPath) {
+          downloadLinks = `<a class="link" href="${j.resultPath.outputPath}" download>${t('jobsPanel.downloadFile')}</a>`;
+        }
+      }
           const baseTitle = titleOf(j);
           const nowT = nowTitle(j);
           const titleText = (j.metadata?.isPlaylist && nowT)
@@ -2970,7 +3079,7 @@ const notificationManager = new NotificationManager();
             (j.lastLogKey && skippedKeywords.test(String(j.lastLogKey))) ||
             (j.error && skippedKeywords.test(String(j.error?.message || j.error)));
           const skippedBadge = showSkippedBadge
-            ? `<span class="chip chip--warn" title="atlananlar">⚠️ ${t?.('jobsPanel.skipped') || 'atlananlar'}${skippedCount ? ` (${skippedCount})` : ''}</span>`
+            ? `<span class="chip chip--warn" title="atlananlar">⚠️ ${t?.('jobs.skipped') || 'atlananlar'}${skippedCount ? ` (${skippedCount})` : ''}</span>`
             : '';
 
           return `
@@ -2998,7 +3107,7 @@ const notificationManager = new NotificationManager();
               <div class="row panel">
                 <span>${p}%</span>
                 <span style="display:flex; gap:8px; align-items:center;">
-                  ${zip || one || many}
+                  ${downloadLinks}
                   <button class="btn-danger" data-stop-panel="${j.id}" ${(['completed','error','canceled'].includes(norm(j.status))) ? 'disabled' : ''} title="${t('btn.stop')}">${t('btn.stop')}</button>
                 </span>
               </div>

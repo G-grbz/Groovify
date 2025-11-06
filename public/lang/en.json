@@ -1,4 +1,6 @@
 {
+  "ui.current": "Processed",
+  "jobs.skipped": "Skipped",
   "ui.processing": "Processing...",
   "ui.loading": "Loading...",
   "notif.allTracksQueued": "All tracks have been queued",

@@ -1,4 +1,6 @@
 {
+  "ui.current": "Verarbeitet",
+  "jobs.skipped": "Übersprungen",
   "ui.processing": "Wird verarbeitet...",
   "ui.loading": "Wird geladen...",
   "notif.allTracksQueued": "Alle Titel wurden zur Warteschlange hinzugefügt",

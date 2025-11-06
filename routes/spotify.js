@@ -50,6 +50,7 @@ router.post("/api/spotify/process/start", async (req, res) => {
       error: null,
       playlist: { total: sp.items?.length || 1, done: 0 },
       phase: "mapping",
+      currentPhase: "mapping",
       lastLog: "",
       lastLogKey: null,
       lastLogVars: null
@@ -58,6 +59,7 @@ router.post("/api/spotify/process/start", async (req, res) => {
 
     sendOk(res, {
       jobId,
+      id: jobId,
       title: sp.title,
       total: sp.items?.length || 1,
       message: "Spotify işlemi başlatıldı"
@@ -75,7 +77,7 @@ async function processSpotifyIntegrated(jobId, sp, format, bitrate) {
   if (!job) return;
 
   try {
-    job.phase = "mapping";
+    job.phase = "mapping"; job.currentPhase = "mapping"; job.currentPhase = "mapping";
     job.progress = 5;
     job.downloadProgress = 0;
     job.convertProgress = 0;
@@ -130,7 +132,7 @@ async function processSpotifyIntegrated(jobId, sp, format, bitrate) {
       if (item.id) {
         matchedCount++;
         if (job.phase !== "downloading") {
-          job.phase = "downloading";
+          job.phase = "downloading"; job.currentPhase = "downloading";
           job.lastLogKey = 'log.downloading.startShort';
           job.lastLogVars = {};
           job.lastLog = `📥 İndirme başlatıldı`;
@@ -174,7 +176,7 @@ async function processSpotifyIntegrated(jobId, sp, format, bitrate) {
     }
 
     dlQueue.end();
-    job.phase = "downloading";
+    job.phase = "downloading"; job.currentPhase = "downloading";
     job.lastLogKey = 'log.downloading.waitAll';
     job.lastLogVars = {};
     job.lastLog = `⏳ Eşleştirmeler tamamlandı. Tüm indirmelerin bitmesi bekleniyor...`;
@@ -187,7 +189,7 @@ async function processSpotifyIntegrated(jobId, sp, format, bitrate) {
       throw new Error("Hiçbir parça indirilemedi");
     }
 
-    job.phase = "converting";
+    job.phase = "converting"; job.currentPhase = "converting";
     job.progress = 70;
     job.downloadProgress = 100;
     job.convertProgress = 0;
@@ -290,7 +292,15 @@ async function processSpotifyIntegrated(jobId, sp, format, bitrate) {
           {
             onProcess: (child) => { try { registerJobProcess(jobId, child); } catch {} },
             includeLyrics: !!job.metadata.includeLyrics,
-            sampleRate: job.sampleRate || 48000
+            sampleRate: job.sampleRate || 48000,
+            onLyricsStats: (delta) => {
+              if (!delta) return;
+              const m = job.metadata || (job.metadata = {});
+              const cur = m.lyricsStats || { found: 0, notFound: 0 };
+              cur.found += Number(delta.found || 0);
+              cur.notFound += Number(delta.notFound || 0);
+              m.lyricsStats = cur;
+            }
           }
         );
 
@@ -347,7 +357,7 @@ async function processSpotifyIntegrated(jobId, sp, format, bitrate) {
     job.progress = 100;
     job.downloadProgress = 100;
     job.convertProgress = 100;
-    job.phase = "completed";
+    job.phase = "completed"; job.currentPhase = "completed";
     job.lastLogKey = 'log.done';
     job.lastLogVars = { ok: successfulResults.length };
     job.lastLog = `🎉 Tüm işlemler tamamlandı! ${successfulResults.length} parça başarıyla dönüştürüldü.`;
@@ -357,7 +367,7 @@ async function processSpotifyIntegrated(jobId, sp, format, bitrate) {
     if (String(error?.message || "").toUpperCase() === "CANCELED") {
       job.status = "canceled";
       job.error = null;
-      job.phase = "canceled";
+      job.phase = "canceled"; job.currentPhase = "canceled";
       job.downloadProgress = 0;
       job.convertProgress = 0;
       job.lastLogKey = 'status.canceled';
@@ -368,7 +378,7 @@ async function processSpotifyIntegrated(jobId, sp, format, bitrate) {
     } else {
       job.status = "error";
       job.error = error.message;
-      job.phase = "error";
+      job.phase = "error"; job.currentPhase = "error";
       job.downloadProgress = 0;
       job.convertProgress = 0;
       job.lastLogKey = 'log.error';
@@ -384,7 +394,7 @@ async function processSingleTrack(jobId, sp, format, bitrate) {
   if (!job) return;
 
   try {
-    job.phase = "mapping";
+    job.phase = "mapping"; job.currentPhase = "mapping";
     job.progress = 10;
     job.lastLogKey = 'log.searchingSingleTrack';
     job.lastLogVars = { artist: sp.items[0]?.artist, title: sp.items[0]?.title };
@@ -427,7 +437,7 @@ async function processSingleTrack(jobId, sp, format, bitrate) {
       throw new Error("Parça eşleştirilemedi");
     }
 
-    job.phase = "downloading";
+    job.phase = "downloading"; job.currentPhase = "downloading";
     job.progress = 30;
     job.lastLogKey = 'log.downloading.single';
     job.lastLogVars = { title: matchedItem.title };
@@ -472,7 +482,7 @@ async function processSingleTrack(jobId, sp, format, bitrate) {
       throw new Error(`Parça indirilemedi: ${firstErr}`);
     }
 
-    job.phase = "converting";
+    job.phase = "converting"; job.currentPhase = "converting";
     job.progress = 80;
     job.lastLogKey = 'log.converting.single';
     job.lastLogVars = { title: matchedItem.title };
@@ -525,16 +535,25 @@ async function processSingleTrack(jobId, sp, format, bitrate) {
       fileMeta, itemCover, (format === "mp4"),
       path.resolve(process.cwd(), "outputs"),
       path.resolve(process.cwd(), "temp"),
-      { onProcess: (child) => { try { registerJobProcess(jobId, child); } catch {} },
-      includeLyrics: !!job.metadata.includeLyrics,
-      sampleRate: job.sampleRate || 48000
+      {
+        onProcess: (child) => { try { registerJobProcess(jobId, child); } catch {} },
+        includeLyrics: !!job.metadata.includeLyrics,
+        sampleRate: job.sampleRate || 48000,
+        onLyricsStats: (delta) => {
+          if (!delta) return;
+          const m = job.metadata || (job.metadata = {});
+          const cur = m.lyricsStats || { found: 0, notFound: 0 };
+          cur.found += Number(delta.found || 0);
+          cur.notFound += Number(delta.notFound || 0);
+          m.lyricsStats = cur;
+        }
       }
     );
 
     job.resultPath = result;
     job.status = "completed";
     job.progress = 100;
-    job.phase = "completed";
+    job.phase = "completed"; job.currentPhase = "completed";
     job.playlist.done = 1;
     job.lastLogKey = 'log.done.single';
     job.lastLogVars = { title: matchedItem.title };
@@ -546,7 +565,7 @@ async function processSingleTrack(jobId, sp, format, bitrate) {
     if (String(error?.message || "").toUpperCase() === "CANCELED") {
       job.status = "canceled";
       job.error = null;
-      job.phase = "canceled";
+      job.phase = "canceled"; job.currentPhase = "canceled";
       job.lastLogKey = 'status.canceled';
       job.lastLogVars = {};
       job.lastLog = "⛔ İptal edildi";
@@ -555,7 +574,7 @@ async function processSingleTrack(jobId, sp, format, bitrate) {
     } else {
       job.status = "error";
       job.error = error.message;
-      job.phase = "error";
+      job.phase = "error"; job.currentPhase = "error";
       job.lastLogKey = 'log.error';
       job.lastLogVars = { err: error.message };
       job.lastLog = `❌ Hata: ${error.message}`;
