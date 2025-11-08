@@ -82,7 +82,7 @@
         <h2 data-i18n="section.file">📁 Dosya Yükle</h2>
         <form id="fileForm" enctype="multipart/form-data">
           <div class="form-group">
-            <input type="file" id="fileInput" accept="video/*,audio/*" required />
+            <input type="file" id="fileInput" accept="video,audio" required />
           </div>
           <button type="submit" data-i18n="btn.upload">Yükle ve Dönüştür</button>
         </form>
@@ -534,6 +534,7 @@ const notificationManager = new NotificationManager();
             this.updateBitrateOptions(format, formats);
           });
         document.getElementById('previewBtn').addEventListener('click', () => this.handlePreviewClick());
+        document.getElementById('fileForm').addEventListener('submit', (e) => this.handleFileSubmit(e));
         document.getElementById('convertSelectedBtn').addEventListener('click', () => this.convertSelected());
         document.getElementById('convertAllBtn').addEventListener('click', () => this.convertAll());
         document.getElementById('selectAllChk').addEventListener('change', (e) => this.toggleSelectAll(e.target.checked));
@@ -1435,9 +1436,9 @@ const notificationManager = new NotificationManager();
       phaseInfo = ` • ${phaseText[job.phase] || job.phase}`;
     }
 
-    let phaseDetails = '';
-    if (job.currentPhase) {
-    const phaseTexts = {
+let phaseDetails = '';
+if (job.currentPhase) {
+  const phaseTexts = {
     preparing: t('phase.preparing'),
     downloading: t('phase.downloading'),
     converting: t('phase.converting'),
@@ -1452,6 +1453,7 @@ const notificationManager = new NotificationManager();
   if (job.playlist && job.playlist.total) {
     if (job.metadata?.source === 'spotify') {
       let downloaded, converted;
+
       if (job.currentPhase === 'downloading') {
         downloaded = job.playlist.done || 0;
         converted = 0;
@@ -1532,7 +1534,7 @@ const notificationManager = new NotificationManager();
       </div>
     `;
   }
-    }
+}
 
     let jobElement = document.getElementById(`job-${job.id}`);
 
@@ -1677,7 +1679,7 @@ const notificationManager = new NotificationManager();
       </div>
       <div class="job-actions" style="display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; margin-top: 8px;">
         <span class="status status-${job.status}">${statusText[job.status]}</span>
-        <div style="display:flex; gap:8px; align-items:center;">
+        <div style="display:flex; gap:8px; align-items:center; flex-direction: column;">
           ${resultContent}
           <button class="btn-danger" data-stop="${job.id}" ${(['completed','error','canceled'].includes(statusNorm)) ? 'disabled' : ''} title="${t('btn.stop')}">${t('btn.stop')}</button>
         </div>
@@ -2507,41 +2509,60 @@ const notificationManager = new NotificationManager();
                   </select>
                 </div>
                 <div class="form-group">
-                  <label>YT_DEFAULT_REGION</label>
+                <label data-i18n="settings.ytdlpBin">YTDLP_BIN</label>
+                    <input id="f_YTDLP_BIN" type="text" placeholder="'C:/tools/yt-dlp.exe'" data-i18n-ph="ph.ytdlpBin">
+                </div>
+                <div class="form-group">
+                  <label data-i18n="settings.ytDefaultRegion">YT_DEFAULT_REGION</label>
                   <input id="f_YT_DEFAULT_REGION" type="text" placeholder="ör: TR, US (boş = kapalı)" data-i18n-ph="ph.ytDefaultRegion" >
                 </div>
                 <div class="form-group">
-                  <label>YT_LANG</label>
+                  <label data-i18n="settings.ytLang">YT_LANG</label>
                   <input id="f_YT_LANG" type="text" placeholder="en-US, tr-TR ..." data-i18n-ph="ph.ytLang" >
                 </div>
                 <div class="form-group">
-                  <label>YT_ACCEPT_LANGUAGE</label>
+                  <label data-i18n="settings.ytAcceptLang">YT_ACCEPT_LANGUAGE</label>
                   <input id="f_YT_ACCEPT_LANGUAGE" type="text" placeholder="en-US,en;q=0.8 (opsiyonel)" data-i18n-ph="ph.ytAcceptLang" >
                 </div>
                 <div class="form-group">
-                  <label>YT_FORCE_IPV4</label>
+                  <label data-i18n="settings.ytForceIpv4">YT_FORCE_IPV4</label>
                   <select id="f_YT_FORCE_IPV4">
                     <option value="1">1</option>
                     <option value="0">0</option>
                   </select>
                 </div>
                 <div class="form-group">
-                  <label>YT_403_WORKAROUNDS</label>
+                <label data-i18n="settings.enrichSpforYy">ENRICH_SPOTIFY_FOR_YT</label>
+                    <select id="f_ENRICH_SPOTIFY_FOR_YT">
+                    <option value="1">1</option>
+                    <option value="0">0</option>
+                </select>
+                </div>
+                <div class="form-group">
+                    <label data-i18n="settings.mediaComment">MEDIA_COMMENT</label>
+                    <input id="f_MEDIA_COMMENT" type="text" placeholder="Gharmonize" data-i18n-ph="ph.mediaComment">
+                </div>
+                <div class="form-group">
+                <label data-i18n="settings.ffmpegBin">FFMPEG_BIN</label>
+                    <input id="f_FFMPEG_BIN" type="text" placeholder=''" data-i18n-ph="ph.ffmpegBin">
+                </div>
+                <div class="form-group">
+                  <label data-i18n="settings.workarounds">YT_403_WORKAROUNDS</label>
                   <select id="f_YT_403_WORKAROUNDS">
                     <option value="1">1</option>
                     <option value="0">0</option>
                   </select>
                 </div>
                 <div class="form-group">
-                  <label>YTDLP_UA</label>
+                  <label data-i18n="settings.ytdlpUA">YTDLP_UA</label>
                   <input id="f_YTDLP_UA" type="text" placeholder="User-Agent (opsiyonel)" data-i18n-ph="ph.ytdlpUA" >
                 </div>
                 <div class="form-group">
-                  <label>YTDLP_COOKIES</label>
+                  <label data-i18n="settings.ytdlpCookies">YTDLP_COOKIES</label>
                   <input id="f_YTDLP_COOKIES" type="text" placeholder="/path/to/cookies.txt (opsiyonel)" data-i18n-ph="ph.ytdlpCookies" >
                 </div>
                 <div class="form-group">
-                  <label>YTDLP_COOKIES_FROM_BROWSER</label>
+                  <label data-i18n="settings.ytdlpBrowser">YTDLP_COOKIES_FROM_BROWSER</label>
                   <select id="f_YTDLP_COOKIES_FROM_BROWSER">
                     <option value="">(kapalı)</option>
                     <option value="chrome">chrome</option>
@@ -2551,11 +2572,11 @@ const notificationManager = new NotificationManager();
                   </select>
                 </div>
                 <div class="form-group">
-                  <label>YTDLP_EXTRA</label>
+                  <label data-i18n="settings.ytdlpExtra">YTDLP_EXTRA</label>
                   <input id="f_YTDLP_EXTRA" type="text" placeholder="Ek argümanlar, ör: --http-chunk-size 10M" data-i18n-ph="ph.ytdlpExtra" >
                 </div>
                 <div class="form-group">
-                  <label>YT_STRIP_COOKIES</label>
+                  <label data-i18n="settings.ytdlpSCookies">YT_STRIP_COOKIES</label>
                   <select id="f_YT_STRIP_COOKIES">
                     <option value="0">0</option>
                     <option value="1">1</option>
@@ -2716,6 +2737,10 @@ const notificationManager = new NotificationManager();
             document.getElementById('f_YT_ACCEPT_LANGUAGE').value = s.YT_ACCEPT_LANGUAGE || '';
             document.getElementById('f_YT_FORCE_IPV4').value = (typeof s.YT_FORCE_IPV4 !== 'undefined' && s.YT_FORCE_IPV4 !== null) ? String(s.YT_FORCE_IPV4) : '1';
             document.getElementById('f_YT_403_WORKAROUNDS').value = (typeof s.YT_403_WORKAROUNDS !== 'undefined' && s.YT_403_WORKAROUNDS !== null) ? String(s.YT_403_WORKAROUNDS) : '1';
+            document.getElementById('f_ENRICH_SPOTIFY_FOR_YT').value = s.ENRICH_SPOTIFY_FOR_YT || '1';
+            document.getElementById('f_MEDIA_COMMENT').value = s.MEDIA_COMMENT || 'Gharmonize';
+            document.getElementById('f_FFMPEG_BIN').value = s.FFMPEG_BIN || '';
+            document.getElementById('f_YTDLP_BIN').value = s.YTDLP_BIN || '';
         }catch(e){
           alert(t('settings.errorLoading') + ': ' + e.message);
         }
@@ -2741,7 +2766,11 @@ const notificationManager = new NotificationManager();
             YT_LANG: document.getElementById('f_YT_LANG').value.trim(),
             YT_ACCEPT_LANGUAGE: document.getElementById('f_YT_ACCEPT_LANGUAGE').value.trim(),
             YT_FORCE_IPV4: document.getElementById('f_YT_FORCE_IPV4').value,
-            YT_403_WORKAROUNDS: document.getElementById('f_YT_403_WORKAROUNDS').value
+            YT_403_WORKAROUNDS: document.getElementById('f_YT_403_WORKAROUNDS').value,
+            ENRICH_SPOTIFY_FOR_YT: document.getElementById('f_ENRICH_SPOTIFY_FOR_YT').value,
+            MEDIA_COMMENT: document.getElementById('f_MEDIA_COMMENT').value.trim(),
+            YTDLP_BIN: document.getElementById('f_YTDLP_BIN').value.trim(),
+            FFMPEG_BIN: document.getElementById('f_FFMPEG_BIN').value.trim()
           }
         };
         try{

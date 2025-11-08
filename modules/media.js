@@ -3,9 +3,43 @@ import fs from "fs";
 import path from "path";
 import os from "os";
 import fetch from "node-fetch";
-import { sanitizeFilename } from "./utils.js";
+import { sanitizeFilename, findOnPATH, isExecutable } from "./utils.js";
 import { attachLyricsToMedia } from "./lyrics.js";
 import { jobs } from "./store.js";
+import 'dotenv/config';
+
+function resolveFfmpegBin() {
+  const isWin = process.platform === "win32";
+  const exe = isWin ? "ffmpeg.exe" : "ffmpeg";
+  const fromPATH = findOnPATH(exe);
+  if (fromPATH && isExecutable(fromPATH)) return fromPATH;
+  const guesses = isWin
+     ? [
+         "C:\\tools\\ffmpeg\\bin\\ffmpeg.exe",
+         "C:\\ffmpeg\\bin\\ffmpeg.exe",
+         "C:\\tools\\yt-dlp\\ffmpeg.exe",
+         "C:\\Windows\\ffmpeg.exe"
+       ]
+     : ["/usr/bin/ffmpeg", "/usr/local/bin/ffmpeg", "/bin/ffmpeg"];
+  if (process.resourcesPath) {
+     const packed = path.join(process.resourcesPath, "bin", exe);
+     guesses.unshift(packed);
+   }
+
+   for (const g of guesses) {
+     if (isExecutable(g)) return g;
+   }
+
+  const fromEnvFile = process.env.FFMPEG_BIN || process.env.FFMPEG_PATH;
+  if (fromEnvFile && isExecutable(fromEnvFile)) return fromEnvFile;
+  const fromEnvDir = process.env.FFMPEG_DIR;
+  if (fromEnvDir) {
+    const candidate = path.join(fromEnvDir, exe);
+    if (isExecutable(candidate)) return candidate;
+  }
+
+   return exe;
+}
 
 function emitLog(onLog, payload) {
   if (payload?.fallback) console.log(payload.fallback);
@@ -58,18 +92,24 @@ export async function downloadThumbnail(thumbnailUrl, destBasePathNoExt) {
   }
 }
 
-export async function ensureJpegCover(coverPath, jobId, tempDir) {
+export async function ensureJpegCover(coverPath, jobId, tempDir, ffmpegFromCaller = null) {
   try {
     if (!coverPath || !fs.existsSync(coverPath)) return null;
     const ext = path.extname(coverPath).toLowerCase();
     if ([".jpg", ".jpeg"].includes(ext)) return coverPath;
+
+    const ffmpegBin = ffmpegFromCaller || resolveFfmpegBin();
     const outJpg = path.join(tempDir, `${jobId}.cover.norm.jpg`);
     await new Promise((resolve, reject) => {
       const args = ["-y", "-hide_banner", "-loglevel", "error", "-i", coverPath, outJpg];
-      const p = spawn("ffmpeg", args);
+      const p = spawn(ffmpegBin, args);
       let err = "";
       p.stderr.on("data", (d) => (err += d.toString()));
-      p.on("close", (code) => (code === 0 && fs.existsSync(outJpg) ? resolve() : reject(new Error(`Kapak dönüştürülemedi (kod ${code}): ${err}`))));
+      p.on("close", (code) =>
+        code === 0 && fs.existsSync(outJpg)
+          ? resolve()
+          : reject(new Error(`Kapak dönüştürülemedi (kod ${code}): ${err}`))
+      );
       p.on("error", (e) => reject(new Error(`ffmpeg başlatma hatası: ${e.message}`)));
     });
     return outJpg;
@@ -78,6 +118,12 @@ export async function ensureJpegCover(coverPath, jobId, tempDir) {
     return null;
   }
 }
+
+const getCommentText = () => {
+  if (process.env.MEDIA_COMMENT) return process.env.MEDIA_COMMENT;
+  if (process.env.COMMENT_TEXT) return process.env.COMMENT_TEXT;
+  return "Gharmonize";
+};
 
 export async function convertMedia(
   inputPath,
@@ -92,7 +138,7 @@ export async function convertMedia(
   tempDir,
   opts = {}
 ) {
-
+  const ffmpegFromOpts = opts?.ffmpegBin || null;
   const isCanceled =
     typeof opts.isCanceled === "function" ? () => !!opts.isCanceled() : () => false;
 
@@ -102,24 +148,31 @@ export async function convertMedia(
   };
   const srOpt1 = parseSR(opts?.sampleRate);
   const srOpt2 = parseSR(opts?.sampleRateHz);
-  const srEnv  = parseSR(process.env.TARGET_SAMPLE_RATE);
+  const srEnv = parseSR(process.env.TARGET_SAMPLE_RATE);
   const SAMPLE_RATE =
-    Number.isFinite(srOpt1) ? srOpt1 :
-    Number.isFinite(srOpt2) ? srOpt2 :
-    Number.isFinite(srEnv)  ? srEnv  :
-    48000;
+    Number.isFinite(srOpt1) ? srOpt1
+    : Number.isFinite(srOpt2) ? srOpt2
+    : Number.isFinite(srEnv) ? srEnv
+    : 48000;
 
   const SAFE_SR = Math.min(192000, Math.max(8000, SAMPLE_RATE));
 
   const pickNearest = (target, allowed) =>
-    allowed.reduce((best, cur) =>
-      Math.abs(cur - target) < Math.abs(best - target) ? cur : best
-    , allowed[0]);
+    allowed.reduce((best, cur) => (Math.abs(cur - target) < Math.abs(best - target) ? cur : best), allowed[0]);
+
+  function commentKeyFor(fmt) {
+    const f = String(fmt || "").toLowerCase();
+    if (f === "flac" || f === "ogg") return "DESCRIPTION";
+    if (f === "mp4" || f === "m4a") return "comment";
+    if (f === "mp3") return "comment";
+    return "comment";
+  }
+  const COMMENT_KEY = commentKeyFor(format);
 
   function normalizeSR(fmt, sr) {
     const f = String(fmt || "").toLowerCase();
     if (f === "mp3") {
-      const allowed = [8000,11025,12000,16000,22050,24000,32000,44100,48000];
+      const allowed = [8000, 11025, 12000, 16000, 22050, 24000, 32000, 44100, 48000];
       const picked = pickNearest(sr, allowed);
       return { sr: picked, note: "mp3-legal" };
     }
@@ -132,13 +185,15 @@ export async function convertMedia(
   const { sr: SR_NORM, note: SR_NOTE } = normalizeSR(format, SAFE_SR);
 
   const srSrc =
-    Number.isFinite(srOpt1) ? "opt.sampleRate" :
-    Number.isFinite(srOpt2) ? "opt.sampleRateHz" :
-    Number.isFinite(srEnv)  ? "env" :
-    "default";
+    Number.isFinite(srOpt1) ? "opt.sampleRate"
+    : Number.isFinite(srOpt2) ? "opt.sampleRateHz"
+    : Number.isFinite(srEnv) ? "env"
+    : "default";
 
   console.log(
-    `🎵 Dönüştürme başladı → giriş: ${path.basename(inputPath)} | biçim: ${format} | söz eklensin: ${opts.includeLyrics !== false ? "evet" : "hayır"} | video: ${isVideo ? "evet" : "hayır"} | sr: ${SAMPLE_RATE} Hz (src=${srSrc} → norm=${SR_NORM} ${SR_NOTE})`
+    `🎵 Dönüştürme başladı → giriş: ${path.basename(inputPath)} | biçim: ${format} | söz eklensin: ${
+      opts.includeLyrics !== false ? "evet" : "hayır"
+    } | video: ${isVideo ? "evet" : "hayır"} | sr: ${SAMPLE_RATE} Hz (src=${srSrc} → norm=${SR_NORM} ${SR_NOTE})`
   );
 
   const template = isVideo
@@ -164,19 +219,20 @@ export async function convertMedia(
 
   if (!isVideo && coverPath && ["mp3", "flac"].includes(format)) {
     try {
-      coverToUse = await ensureJpegCover(coverPath, jobId, tempDir);
+      coverToUse = await ensureJpegCover(coverPath, jobId, tempDir, ffmpegFromOpts);
     } catch (e) {
       console.warn("⚠️ Kapak dönüştürme hatası:", e.message);
     }
     if (coverToUse && fs.existsSync(coverToUse)) canEmbedCover = true;
   }
 
+  const ffmpegBin = ffmpegFromOpts || resolveFfmpegBin();
+  console.log(`🧭 Kullanılan FFmpeg: ${ffmpegBin}`);
+
   const result = await new Promise((resolve, reject) => {
     const args = ["-hide_banner", "-nostdin", "-y", "-i", inputPath];
 
-    if (isCanceled()) {
-      return reject(new Error("CANCELED"));
-    }
+    if (isCanceled()) return reject(new Error("CANCELED"));
 
     if (!isVideo && !canEmbedCover) args.push("-vn");
     if (canEmbedCover) args.push("-i", coverToUse);
@@ -187,9 +243,10 @@ export async function convertMedia(
     const dtot = Number(resolvedMeta.disc_total) || null;
     const trackTag = tn ? (ttot ? `${tn}/${ttot}` : String(tn)) : "";
     const discTag = dn ? (dtot ? `${dn}/${dtot}` : String(dn)) : "";
-    const dateTag = resolvedMeta.release_date && /^\d{4}(-\d{2}(-\d{2})?)?$/.test(resolvedMeta.release_date)
-      ? resolvedMeta.release_date
-      : resolvedMeta.release_year || resolvedMeta.upload_date || "";
+    const dateTag =
+      resolvedMeta.release_date && /^\d{4}(-\d{2}(-\d{2})?)?$/.test(resolvedMeta.release_date)
+        ? resolvedMeta.release_date
+        : resolvedMeta.release_year || resolvedMeta.upload_date || "";
 
     const metaPairs = {
       title: resolvedMeta.track || resolvedMeta.title || "",
@@ -198,28 +255,56 @@ export async function convertMedia(
       date: dateTag || "",
       track: trackTag || "",
       disc: discTag || "",
-      comment: resolvedMeta.webpage_url || resolvedMeta.spotifyUrl || "",
-      genre: resolvedMeta.genre || "",
+      genre: resolvedMeta.genre || ""
     };
+
+    if (resolvedMeta.album_artist) metaPairs.album_artist = resolvedMeta.album_artist;
+
+    const labelLike = resolvedMeta.label || resolvedMeta.publisher;
+    if (labelLike) metaPairs.publisher = labelLike;
+
+    if (resolvedMeta.copyright) metaPairs.copyright = resolvedMeta.copyright;
+
+    args.push("-map_metadata", "-1");
 
     for (const [k, v] of Object.entries(metaPairs)) {
       if (v) args.push("-metadata", `${k}=${v}`);
     }
 
+    const commentText = getCommentText();
+    if (commentText && format !== "mp3") {
+      args.push("-metadata", `${COMMENT_KEY}=${commentText}`);
+    }
+
     if (resolvedMeta.isrc) args.push("-metadata", `ISRC=${resolvedMeta.isrc}`);
+
+    if (!isVideo && (format === "flac" || format === "ogg")) {
+      if (resolvedMeta.album_artist) args.push("-metadata", `ALBUMARTIST=${resolvedMeta.album_artist}`);
+      if (labelLike) {
+        args.push("-metadata", `LABEL=${labelLike}`);
+        args.push("-metadata", `PUBLISHER=${labelLike}`);
+      }
+      if (resolvedMeta.webpage_url) args.push("-metadata", `URL=${resolvedMeta.webpage_url}`);
+      if (resolvedMeta.genre) args.push("-metadata", `GENRE=${resolvedMeta.genre}`);
+      if (resolvedMeta.copyright) args.push("-metadata", `COPYRIGHT=${resolvedMeta.copyright}`);
+    }
+
+    if (!isVideo && format === "mp3") {
+      if (resolvedMeta.album_artist) args.push("-metadata", `ALBUMARTIST=${resolvedMeta.album_artist}`);
+      if (resolvedMeta.genre) args.push("-metadata", `genre=${resolvedMeta.genre}`);
+      if (resolvedMeta.copyright) args.push("-metadata", `copyright=${resolvedMeta.copyright}`);
+      if (resolvedMeta.webpage_url) args.push("-metadata", `URL=${resolvedMeta.webpage_url}`);
+
+      const cmt = getCommentText();
+      if (cmt) args.push("-metadata", `comment=${cmt}`);
+    }
 
     if (canEmbedCover) {
       args.push(
-        "-map",
-        "0:a",
-        "-map",
-        "1:v?",
-        "-disposition:v",
-        "attached_pic",
-        "-metadata:s:v",
-        "title=Album cover",
-        "-metadata:s:v",
-        "comment=Cover (front)"
+        "-map", "0:a",
+        "-map", "1:v?",
+        "-disposition:v", "attached_pic",
+        "-metadata:s:v", "title=Album cover"
       );
       if (format === "mp3") args.push("-c:v", "mjpeg", "-id3v2_version", "3");
       else if (format === "flac") args.push("-c:v", "mjpeg");
@@ -241,20 +326,13 @@ export async function convertMedia(
         }
 
         args.push(
-          "-pix_fmt",
-          "yuv420p",
-          "-profile:v",
-          "high",
-          "-level",
-          "4.1",
-          "-movflags",
-          "+faststart",
-          "-g",
-          "60",
-          "-keyint_min",
-          "60",
-          "-sc_threshold",
-          "0"
+          "-pix_fmt", "yuv420p",
+          "-profile:v", "high",
+          "-level", "4.1",
+          "-movflags", "+faststart",
+          "-g", "60",
+          "-keyint_min", "60",
+          "-sc_threshold", "0"
         );
 
         args.push("-c:a", "aac", "-b:a", "128k", "-ac", "2", "-ar", String(SR_NORM));
@@ -263,8 +341,10 @@ export async function convertMedia(
     } else {
       switch (format) {
         case "mp3":
+          args.push("-id3v2_version", "3");
+          if (process.env.WRITE_ID3V1 === "1") args.push("-write_id3v1", "1");
           if (bitrate === "auto" || bitrate === "0") {
-             args.push("-acodec", "libmp3lame", "-q:a", "0", "-ar", String(SR_NORM));
+            args.push("-acodec", "libmp3lame", "-q:a", "0", "-ar", String(SR_NORM));
           } else {
             args.push("-acodec", "libmp3lame", "-b:a", bitrate, "-ar", String(SR_NORM));
           }
@@ -289,7 +369,8 @@ export async function convertMedia(
 
     console.log("🔧 FFmpeg argümanları:", args);
 
-    const ffmpeg = spawn("ffmpeg", args);
+    let triedFallback = false;
+    let ffmpeg = spawn(ffmpegBin, args);
     try {
       if (typeof opts.onProcess === "function") {
         opts.onProcess(ffmpeg);
@@ -302,7 +383,9 @@ export async function convertMedia(
     const tryCancel = () => {
       if (!canceledByFlag && isCanceled()) {
         canceledByFlag = true;
-        try { ffmpeg.kill("SIGTERM"); } catch {}
+        try {
+          ffmpeg.kill("SIGTERM");
+        } catch {}
       }
     };
 
@@ -321,7 +404,7 @@ export async function convertMedia(
       tryCancel();
 
       const t = line.match(/time=(\d+):(\d+):(\d+\.\d+)/);
-        if (t && duration) {
+      if (t && duration) {
         const [, h, mn, s] = t;
         const cur = +h * 3600 + +mn * 60 + +s;
         const p = Math.min(99, Math.floor((cur / duration) * 100));
@@ -333,7 +416,9 @@ export async function convertMedia(
     ffmpeg.on("close", (code) => {
       const actualOut = outputPath;
       if (canceledByFlag || isCanceled()) {
-        try { if (actualOut && fs.existsSync(actualOut)) fs.unlinkSync(actualOut); } catch {}
+        try {
+          if (actualOut && fs.existsSync(actualOut)) fs.unlinkSync(actualOut);
+        } catch {}
         return reject(new Error("CANCELED"));
       }
 
@@ -342,7 +427,7 @@ export async function convertMedia(
         console.log(`✅ Dönüştürme tamamlandı: ${outputPath}`);
         resolve({
           outputPath: `/download/${encodeURIComponent(outputFileName)}`,
-          fileSize: fs.statSync(outputPath).size,
+          fileSize: fs.statSync(outputPath).size
         });
       } else {
         try {
@@ -356,6 +441,23 @@ export async function convertMedia(
 
     ffmpeg.on("error", (e) => {
       console.error(`❌ FFmpeg başlatma hatası: ${e.message}`);
+      if (!triedFallback && /ENOENT/i.test(e.message)) {
+        triedFallback = true;
+        try {
+          ffmpeg = spawn(process.platform === "win32" ? "ffmpeg.exe" : "ffmpeg", args);
+          if (typeof opts.onProcess === "function") {
+            try { opts.onProcess(ffmpeg); } catch {}
+          }
+          ffmpeg.stderr.on("data", (d) => {  });
+          ffmpeg.on("close", (code) => { });
+          ffmpeg.on("error", (e2) => {
+            reject(new Error(`FFmpeg spawn error (fallback): ${e2.message}`));
+          });
+          return;
+        } catch (e2) {
+          return reject(new Error(`FFmpeg spawn error (fallback init): ${e2.message}`));
+        }
+      }
       reject(new Error(`FFmpeg spawn error: ${e.message}`));
     });
   });
@@ -367,7 +469,9 @@ export async function convertMedia(
     const includeLyricsFlag = opts.includeLyrics !== false;
 
     console.log(
-      `🔍 Söz kontrolü → eklenecek mi: ${includeLyricsFlag ? "evet" : "hayır"} | video: ${isVideo ? "evet" : "hayır"} | biçim: ${format} | meta: ${[metadata.artist, metadata.title || metadata.track].filter(Boolean).join(" - ")}`
+      `🔍 Söz kontrolü → eklenecek mi: ${includeLyricsFlag ? "evet" : "hayır"} | video: ${
+        isVideo ? "evet" : "hayır"
+      } | biçim: ${format} | meta: ${[metadata.artist, metadata.title || metadata.track].filter(Boolean).join(" - ")}`
     );
 
     if (includeLyricsFlag && !isVideo && result && result.outputPath) {
@@ -409,7 +513,7 @@ export async function convertMedia(
           includeLyrics: includeLyricsFlag,
           jobId: jobId.split("_")[0],
           onLog: lyricsLogCallback,
-          onLyricsStats: opts.onLyricsStats,
+          onLyricsStats: opts.onLyricsStats
         });
 
         if (lyricsPath) {
@@ -444,7 +548,9 @@ export async function convertMedia(
       }
     } else {
       console.log(
-        `⚙️ Söz eklenmedi → eklensin mi: ${includeLyricsFlag ? "evet" : "hayır"} | sebep: ${isVideo ? "Video biçimi" : "Devre dışı"}`
+        `⚙️ Söz eklenmedi → eklensin mi: ${includeLyricsFlag ? "evet" : "hayır"} | sebep: ${
+          isVideo ? "Video biçimi" : "Devre dışı"
+        }`
       );
     }
 
@@ -454,5 +560,3 @@ export async function convertMedia(
     return result;
   }
 }
-
-

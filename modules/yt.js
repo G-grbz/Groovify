@@ -1012,3 +1012,41 @@ export function buildEntriesMap(ytMetadata) {
 
   return map;
 }
+
+export async function probeYoutubeMusicMeta(input) {
+  const url = typeof input === "string" && !/^https?:\/\//i.test(input)
+    ? `https://www.youtube.com/watch?v=${input}`
+    : input;
+  const data = await runYtJson([
+    "--no-playlist",
+    url
+  ], "yt-music-probe", 20000);
+
+  const d = Array.isArray(data?.entries) ? data.entries[0] : data;
+  if (!d) return null;
+
+  const artist = toNFC(d.artist || d.artist_uploader || d.uploader || d.channel || "");
+  const track  = toNFC(d.track  || d.title || "");
+  const album  = toNFC(d.album  || "");
+  const year   = (d.release_year && String(d.release_year)) || "";
+  const date   = d.release_date || d.upload_date || "";
+  const cover  = (Array.isArray(d.thumbnails) && d.thumbnails.length
+    ? d.thumbnails.at(-1).url : d.thumbnail || null);
+
+  const out = {
+    title: track || d.title || "",
+    track: track || d.title || "",
+    artist: artist || "",
+    uploader: artist || d.uploader || "",
+    album: album || "",
+    album_artist: artist || "",
+    release_year: year || (date ? String(date).slice(0,4) : ""),
+    release_date: date || "",
+    isrc: d.isrc || "",
+    coverUrl: cover || "",
+    webpage_url: d.webpage_url || d.original_url || url
+  };
+
+  if (!out.title && !out.artist) return null;
+  return out;
+}

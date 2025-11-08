@@ -28,10 +28,20 @@ fs.mkdirSync(UPLOAD_DIR, { recursive: true });
 
 const inFlightAutomix = new Map();
 
+function toUtf8Filename(name) {
+  try {
+    return Buffer.from(name, "latin1").toString("utf8");
+  } catch {
+    return name;
+  }
+}
+
 const storage = multer.diskStorage({
   destination: UPLOAD_DIR,
-  filename: (req, file, cb) =>
-    cb(null, `${crypto.randomBytes(8).toString("hex")}_${file.originalname}`)
+  filename: (req, file, cb) => {
+    const origUtf8 = toUtf8Filename(file.originalname);
+    cb(null, `${crypto.randomBytes(8).toString("hex")}_${origUtf8}`);
+  }
 });
 const upload = multer({
   storage,
@@ -51,7 +61,7 @@ router.get("/api/stream/:id", (req, res) => {
   if (!job) return res.status(404).json({ error: "İş bulunamadı" });
 
   res.writeHead(200, {
-    "Content-Type": "text/event-stream",
+    "Content-Type": "text/event-stream; charset=utf-8",
     "Cache-Control": "no-cache, no-transform",
     Connection: "keep-alive",
     "X-Accel-Buffering": "no"
@@ -170,10 +180,13 @@ router.post("/api/jobs", upload.single("file"), async (req, res) => {
     let inputPath = null;
 
     if (req.file) {
-      inputPath = req.file.path;
-      metadata.originalName = req.file.originalname;
-      metadata.source = "file";
-    }
+    inputPath = req.file.path;
+    const origUtf8 = (typeof toUtf8Filename === "function")
+      ? toUtf8Filename(req.file.originalname)
+      : req.file.originalname;
+    metadata.originalName = origUtf8;
+    metadata.source = "file";
+  }
 
     if (!inputPath && url) {
       if (isSpotifyUrl(url)) {
@@ -459,7 +472,7 @@ router.get("/api/jobs", requireAuth, (req, res) => {
 
 router.get("/api/stream", requireAuth, (req, res) => {
   res.writeHead(200, {
-    "Content-Type": "text/event-stream",
+    "Content-Type": "text/event-stream; charset=utf-8",
     "Cache-Control": "no-cache, no-transform",
     Connection: "keep-alive",
     "X-Accel-Buffering": "no",

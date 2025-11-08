@@ -143,24 +143,30 @@ export async function downloadSingleYouTubeVideo(url, fileId, downloadDir) {
   const base = [
     "-f","bestaudio/best","--no-playlist","--no-part","--continue","--no-overwrites",
     "--retries","3","--fragment-retries","3","--concurrent-fragments","1",
-    "--write-thumbnail","--convert-thumbnails","jpg",
+    "--write-thumbnail",
     "-o", template
   ];
 
-  let args = [...getYtDlpCommonArgs(), ...base, url];
+  let args = [...getYtDlpCommonArgs(), "--no-abort-on-error", ...base, url];
   const stripCookies = (process.env.YT_STRIP_COOKIES === "1");
   let finalArgs = withYT403Workarounds(args, { stripCookies });
 
   return new Promise((resolve, reject) => {
+    const findDownloaded = () => {
+      try {
+        const files = fs.readdirSync(downloadDir)
+          .filter(f => f.startsWith(`${fileId}.`) && /(\.(mp4|webm|m4a|mp3|opus|flac|wav|aac|ogg))$/i.test(f));
+        return files.length > 0 ? path.join(downloadDir, files[0]) : null;
+      } catch { return null; }
+    };
     const child = execFile(YTDLP_BIN, finalArgs, { maxBuffer: 1024 * 1024 * 1024 }, (err, _stdout, stderr) => {
       if (!err) {
-        try {
-          const files = fs.readdirSync(downloadDir)
-            .filter(f => f.startsWith(`${fileId}.`) && /(\.(mp4|webm|m4a|mp3|opus|flac|wav|aac|ogg))$/i.test(f));
-          if (files.length > 0) return resolve(path.join(downloadDir, files[0]));
-        } catch {}
-        return reject(new Error("Dosya indirildi ama bulunamadı"));
+        const p = findDownloaded();
+        return p ? resolve(p) : reject(new Error("Dosya indirildi ama bulunamadı"));
       }
+
+      const have = findDownloaded();
+      if (have) return resolve(have);
 
       const stderrStr = String(stderr || "");
       const is403 = /403|Forbidden/i.test(stderrStr);

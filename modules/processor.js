@@ -16,6 +16,8 @@ import {
 import { downloadThumbnail } from "./media.js";
 import { convertMedia } from "./media.js";
 import { buildId3FromYouTube } from "./tags.js";
+import { probeYoutubeMusicMeta } from "./yt.js";
+import { findSpotifyMetaByQuery } from "./spotify.js";
 
 const OUTPUT_DIR = path.resolve(process.cwd(), "outputs");
 const TEMP_DIR = path.resolve(process.cwd(), "temp");
@@ -29,8 +31,19 @@ function clampInt(v, min, max) {
   if (v > max) return max;
   return v;
 }
+
 function bump(obj, key, inc = 1) {
   obj[key] = (obj[key] || 0) + inc;
+}
+
+function mergeMeta(base, extra) {
+  if (!extra) return base;
+  for (const [k, v] of Object.entries(extra)) {
+    if (v == null) continue;
+    if (typeof v === "string" && v.trim() === "") continue;
+    if (base[k] == null || base[k] === "") base[k] = v;
+  }
+  return base;
 }
 
 export async function processJob(jobId, inputPath, format, bitrate) {
@@ -50,7 +63,6 @@ export async function processJob(jobId, inputPath, format, bitrate) {
     if (!job?.metadata?.includeLyrics) return;
 
     const usedDone = Math.max(0, Number(doneCount || 0));
-
     let foundSafe = Number(lyricsFound || 0);
     if (Number.isFinite(totalCount) && totalCount != null) {
       foundSafe = Math.min(foundSafe, Number(totalCount));
@@ -98,7 +110,6 @@ export async function processJob(jobId, inputPath, format, bitrate) {
     job.currentPhase = "preparing";
     job.metadata = job.metadata || {};
     job.counters = job.counters || { dlTotal: 0, dlDone: 0, cvTotal: 0, cvDone: 0 };
-
     if (format === "mp4" && job.metadata?.source === "youtube") {
       await processYouTubeVideoJob(job, { OUTPUT_DIR, TEMP_DIR });
       try {
@@ -122,6 +133,7 @@ export async function processJob(jobId, inputPath, format, bitrate) {
 
     let actualInputPath = inputPath;
     let coverPath = null;
+
     if (job.metadata.source === "spotify") {
       job.currentPhase = "downloading";
       job.downloadProgress = 5;
@@ -177,7 +189,6 @@ export async function processJob(jobId, inputPath, format, bitrate) {
       const frozen = Array.isArray(job.metadata.frozenEntries) ? job.metadata.frozenEntries : [];
       const byId = new Map();
       for (const e of frozen) if (e?.id) byId.set(e.id, e);
-
       const sorted = files.map((fp, i) => ({ fp, auto: i + 1 })).sort((a, b) => a.auto - b.auto);
       const results = [];
       job.playlist = { total: sorted.length, done: 0 };
@@ -187,16 +198,15 @@ export async function processJob(jobId, inputPath, format, bitrate) {
         const { fp: filePath, auto } = sorted[i];
         const pinnedId = selectedIds[auto - 1];
         const entry = (pinnedId ? byId.get(pinnedId) : null) || {};
-
         const fallbackTitle = path.basename(filePath, path.extname(filePath)).replace(/^\d+\s*-\s*/, "");
         const title = toNFC(entry.title || fallbackTitle);
-
         const fileMeta = {
           title,
           track: title,
           uploader: entry.uploader || "",
           artist: entry.artist || entry.uploader || "",
           album: entry.album || "",
+          album_artist: entry.album_artist || entry.artist || entry.uploader || "",
           playlist_title: job.metadata.spotifyTitle || "Spotify Playlist",
           webpage_url: entry.webpage_url || "",
           release_year: entry.year || "",
@@ -205,7 +215,11 @@ export async function processJob(jobId, inputPath, format, bitrate) {
           disc_number: entry.disc_number,
           track_total: entry.track_total,
           disc_total: entry.disc_total,
-          isrc: entry.isrc
+          isrc: entry.isrc,
+          genre: entry.genre || "",
+          label: entry.label || null,
+          publisher: entry.label || null,
+          copyright: entry.copyright || "",
         };
 
         let itemCover = null;
@@ -227,13 +241,13 @@ export async function processJob(jobId, inputPath, format, bitrate) {
             bitrate,
             `${jobId}_${i}`,
             (progress) => {
-            const baseProgress = (i / sorted.length) * 100;
-            const currentFileProgress = (progress / 100) * (100 / sorted.length);
-            job.convertProgress = Math.floor(baseProgress + currentFileProgress);
+              const baseProgress = (i / sorted.length) * 100;
+              const currentFileProgress = (progress / 100) * (100 / sorted.length);
+              job.convertProgress = Math.floor(baseProgress + currentFileProgress);
 
               if (job.playlist) {
-              job.playlist.current = i;
-            }
+                job.playlist.current = i;
+              }
               job.progress = Math.floor((job.downloadProgress + job.convertProgress) / 2);
             },
             fileMeta,
@@ -253,6 +267,7 @@ export async function processJob(jobId, inputPath, format, bitrate) {
             }
           );
         }
+
         const hasLrc = !!r?.lyricsPath;
         if (Array.isArray(job.metadata.frozenEntries)) {
           const fe = job.metadata.frozenEntries.find(x => x.index === (i + 1));
@@ -356,8 +371,8 @@ export async function processJob(jobId, inputPath, format, bitrate) {
           (selectedIdsVar && selectedIdsVar.length) ? selectedIdsVar.length :
           (selectedIndicesVar && selectedIndicesVar.length) ? selectedIndicesVar.length :
           (Number.isFinite(ytMeta?.n_entries) ? ytMeta.n_entries :
-          Number.isFinite(ytMeta?.playlist_count) ? ytMeta.playlist_count :
-          (Array.isArray(ytMeta?.entries) ? ytMeta.entries.length : null));
+            Number.isFinite(ytMeta?.playlist_count) ? ytMeta.playlist_count :
+              (Array.isArray(ytMeta?.entries) ? ytMeta.entries.length : null));
 
         if (Number.isFinite(totalGuess) && totalGuess > 0) {
           job.playlist = { total: totalGuess, done: 0 };
@@ -388,10 +403,10 @@ export async function processJob(jobId, inputPath, format, bitrate) {
               if ((job.counters.dlDone || 0) < approx) job.counters.dlDone = approx;
             }
             if (job.playlist && job.currentPhase === 'downloading') {
-     job.playlist.current = Math.max(0, Math.min(t - 1, Math.floor((progress / 100) * t)));
-   }
+              job.playlist.current = Math.max(0, Math.min(t - 1, Math.floor((progress / 100) * t)));
+            }
             job.progress = Math.floor((job.downloadProgress + job.convertProgress) / 2);
-            },
+          },
           {
             video: (format === "mp4"),
             onSkipUpdate: handleSkipUpdate,
@@ -470,11 +485,43 @@ export async function processJob(jobId, inputPath, format, bitrate) {
             uploader: toNFC(entry.uploader || flat.uploader),
             artist: toNFC(entry.artist || entry.uploader || flat.artist || flat.uploader),
             album: flat.album || (ytMeta?.title || ytMeta?.playlist_title || job.metadata.frozenTitle || ""),
-            webpage_url: entry.webpage_url || entry.url || flat.webpage_url
+            webpage_url: entry.webpage_url || entry.url || flat.webpage_url,
+            genre: "",
+            label: "",
+            publisher: "",
+            copyright: "",
+            album_artist: ""
           };
-
+          fileMeta.album_artist = toNFC((entry && entry.album_artist) || fileMeta.artist || "");
           if (/^(youtube|youtube\s+mix)$/i.test((fileMeta.artist || "").trim())) {
             fileMeta.artist = "";
+          }
+
+          try {
+            const ytMusic = await probeYoutubeMusicMeta(entry?.webpage_url || entry?.id);
+            fileMeta = mergeMeta(fileMeta, ytMusic);
+          } catch {}
+
+          if (process.env.ENRICH_SPOTIFY_FOR_YT === "1") {
+            try {
+              const spMeta = await findSpotifyMetaByQuery(fileMeta.artist, fileMeta.track, job?.metadata?.market);
+              if (spMeta) {
+                fileMeta = {
+                  ...fileMeta,
+                  genre: spMeta.genre || fileMeta.genre,
+                  label: spMeta.label || fileMeta.label,
+                  publisher: spMeta.publisher || spMeta.label || fileMeta.publisher,
+                  copyright: spMeta.copyright || fileMeta.copyright,
+                  album_artist: spMeta.album_artist || fileMeta.album_artist,
+                  album: spMeta.album || fileMeta.album,
+                  release_year: spMeta.release_year || fileMeta.release_year,
+                  release_date: spMeta.release_date || fileMeta.release_date,
+                  isrc: spMeta.isrc || fileMeta.isrc
+                };
+              }
+            } catch (error) {
+              console.warn(`Spotify metadata zenginleştirme hatası: ${error.message}`);
+            }
           }
 
           let itemCover = null;
@@ -482,6 +529,12 @@ export async function processJob(jobId, inputPath, format, bitrate) {
           const sidecarJpg = `${baseNoExt}.jpg`;
           if (fs.existsSync(sidecarJpg)) itemCover = sidecarJpg;
           else if (coverPath && fs.existsSync(coverPath)) itemCover = coverPath;
+          else if (fileMeta?.coverUrl) {
+            try {
+              const dl = await downloadThumbnail(fileMeta.coverUrl, `${baseNoExt}.cover`);
+              if (dl) itemCover = dl;
+            } catch {}
+          }
 
           try {
             const strictMeta = await resolveId3StrictForYouTube(
@@ -497,10 +550,22 @@ export async function processJob(jobId, inputPath, format, bitrate) {
               fileMeta = {
                 ...fileMeta,
                 ...strictMeta,
+                genre: fileMeta.genre || strictMeta.genre,
+                label: fileMeta.label || strictMeta.label,
+                publisher: fileMeta.publisher || strictMeta.publisher,
+                copyright: fileMeta.copyright || strictMeta.copyright,
+                album_artist: fileMeta.album_artist || strictMeta.album_artist,
                 webpage_url: strictMeta.spotifyUrl || fileMeta.webpage_url
               };
+              fileMeta.album_artist = toNFC(fileMeta.album_artist || fileMeta.artist || "");
+              if (strictMeta.label) {
+                if (!fileMeta.label) fileMeta.label = strictMeta.label;
+                if (!fileMeta.publisher) fileMeta.publisher = strictMeta.label;
+              }
             }
-          } catch {}
+          } catch (error) {
+            console.warn(`ID3 strict çözümleme hatası: ${error.message}`);
+          }
 
           const existingOut = findExistingOutput(`${jobId}_${i}`, format, OUTPUT_DIR);
           let r;
@@ -517,13 +582,12 @@ export async function processJob(jobId, inputPath, format, bitrate) {
               bitrate,
               `${jobId}_${i}`,
               (progress) => {
-              const baseProgress = (i / sorted.length) * 100;
-              const currentFileProgress = (progress / 100) * (100 / sorted.length);
-              job.convertProgress = Math.floor(baseProgress + currentFileProgress);
-
-              if (job.playlist) {
-                job.playlist.current = i;
-              }
+                const baseProgress = (i / sorted.length) * 100;
+                const currentFileProgress = (progress / 100) * (100 / sorted.length);
+                job.convertProgress = Math.floor(baseProgress + currentFileProgress);
+                if (job.playlist) {
+                  job.playlist.current = i;
+                }
                 job.progress = Math.floor((job.downloadProgress + job.convertProgress) / 2);
               },
               fileMeta,
@@ -619,6 +683,28 @@ export async function processJob(jobId, inputPath, format, bitrate) {
       if (fs.existsSync(sidecar)) coverPath = sidecar;
     }
 
+    let singleMeta = { ...(job.metadata.extracted || {}) };
+    try {
+      const ytMusicSingle = await probeYoutubeMusicMeta(singleMeta.webpage_url || job.metadata.url);
+      singleMeta = mergeMeta(singleMeta, ytMusicSingle);
+    } catch {}
+    if (process.env.ENRICH_SPOTIFY_FOR_YT === "1") {
+      try {
+        const spSingle = await findSpotifyMetaByQuery(singleMeta.artist, singleMeta.track, job?.metadata?.market);
+        singleMeta = mergeMeta(singleMeta, spSingle);
+        if (!singleMeta.publisher && spSingle?.label) singleMeta.publisher = spSingle.label;
+      } catch {}
+    }
+    singleMeta.album_artist = singleMeta.album_artist || singleMeta.artist || "";
+
+    if (!coverPath && singleMeta?.coverUrl && typeof actualInputPath === "string") {
+      try {
+        const baseNoExt = actualInputPath.replace(/\.[^.]+$/, "");
+        const dl = await downloadThumbnail(singleMeta.coverUrl, `${baseNoExt}.cover`);
+        if (dl) coverPath = dl;
+      } catch {}
+    }
+
     job.counters = job.counters || {};
     job.counters.cvTotal = 1;
 
@@ -635,7 +721,7 @@ export async function processJob(jobId, inputPath, format, bitrate) {
             job.progress = Math.floor((job.downloadProgress + job.convertProgress) / 2);
           },
           {
-            ...(job.metadata.extracted || {}),
+            ...singleMeta,
             __maxHeight: (format === "mp4") ? qualityToHeight(bitrate) : undefined
           },
           coverPath,
@@ -653,8 +739,39 @@ export async function processJob(jobId, inputPath, format, bitrate) {
         );
 
     job.resultPath = r;
+    try {
+      if (job.metadata?.source === "file" && r?.outputPath) {
+        const extMap = { mp3: ".mp3", flac: ".flac", wav: ".wav", ogg: ".ogg", mp4: ".mp4" };
+        const desiredExt = extMap[format] || ('.' + String(format || 'mp3'));
+        const originalBase = (job.metadata.originalName || "output")
+          .replace(/\.[^.]*$/, "");
+        const safeBase = sanitizeFilename(toNFC(originalBase));
+        let targetName = `${safeBase}${desiredExt}`;
+        const currentRel = decodeURIComponent(String(r.outputPath).replace(/^\/download\//, ""));
+        const currentAbs = path.join(OUTPUT_DIR, currentRel);
+        let targetAbs = path.join(OUTPUT_DIR, targetName);
+        if (fs.existsSync(targetAbs)) {
+          let i = 1;
+          const stem = safeBase;
+          const ext = desiredExt;
+          while (fs.existsSync(targetAbs) && i < 1000) {
+            targetName = `${stem} (${i})${ext}`;
+            targetAbs = path.join(OUTPUT_DIR, targetName);
+            i++;
+          }
+        }
+        fs.renameSync(currentAbs, targetAbs);
+        job.resultPath = { outputPath: `/download/${encodeURIComponent(targetName)}` };
+        const oldLrc = currentAbs.replace(/\.[^/.]+$/, "") + ".lrc";
+        if (fs.existsSync(oldLrc)) {
+          const newLrc = targetAbs.replace(/\.[^/.]+$/, "") + ".lrc";
+          try { fs.renameSync(oldLrc, newLrc); } catch {}
+        }
+      }
+    } catch (e) {
+      console.warn("Output rename warning:", e.message);
+    }
     job.counters.cvDone = 1;
-
     if (job.metadata?.includeLyrics) {
       updateLyricsStatsLive(1, 1);
     }

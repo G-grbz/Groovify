@@ -249,7 +249,12 @@ async function processSpotifyIntegrated(jobId, sp, format, bitrate) {
         disc_number:  spInfo.disc_number,
         track_total:  spInfo.track_total,
         disc_total:   spInfo.disc_total,
-        isrc:         spInfo.isrc
+        isrc:         spInfo.isrc,
+        album_artist: spInfo.album_artist || "",
+        genre:        spInfo.genre || "",
+        label:        spInfo.label || "",
+        publisher:    spInfo.label || "",
+        copyright:    spInfo.copyright || ""
       } : {
         title: entry.title,
         track: entry.title,
@@ -260,17 +265,19 @@ async function processSpotifyIntegrated(jobId, sp, format, bitrate) {
         webpage_url: entry.webpage_url
       };
 
-      let itemCover = null;
-      const baseNoExt = filePath.replace(/\.[^.]+$/, "");
-      const sidecarJpg = `${baseNoExt}.jpg`;
-      if (fs.existsSync(sidecarJpg)) itemCover = sidecarJpg;
-
-      else if (preferSpotify && spInfo?.coverUrl) {
-        try {
-          const dl = await downloadThumbnail(spInfo.coverUrl, `${baseNoExt}.spotify_cover`);
-          if (dl) itemCover = dl;
-        } catch {}
-      }
+          let itemCover = null;
+          const baseNoExt = filePath.replace(/\.[^.]+$/, "");
+          const coverExts = [".jpg", ".jpeg", ".png", ".webp"];
+          for (const ext of coverExts) {
+            const cand = `${baseNoExt}${ext}`;
+            if (fs.existsSync(cand)) { itemCover = cand; break; }
+          }
+          if (!itemCover && preferSpotify && spInfo?.coverUrl) {
+            try {
+              const dl = await downloadThumbnail(spInfo.coverUrl, `${baseNoExt}.spotify_cover`);
+              if (dl) itemCover = dl;
+            } catch {}
+          }
 
       try {
         if (shouldCancel()) { throw new Error("CANCELED"); }
@@ -505,7 +512,12 @@ async function processSingleTrack(jobId, sp, format, bitrate) {
       disc_number: spInfo.disc_number,
       track_total: spInfo.track_total,
       disc_total: spInfo.disc_total,
-      isrc: spInfo.isrc
+      isrc: spInfo.isrc,
+      album_artist: spInfo.album_artist || "",
+      genre:        spInfo.genre || "",
+      label:        spInfo.label || "",
+      publisher:    spInfo.label || "",
+      copyright:    spInfo.copyright || ""
     } : {
       title: matchedItem.title,
       track: matchedItem.title,
@@ -516,11 +528,12 @@ async function processSingleTrack(jobId, sp, format, bitrate) {
 
     let itemCover = null;
     const baseNoExt = filePath.replace(/\.[^.]+$/, "");
-    const sidecarJpg = `${baseNoExt}.jpg`;
-
-    if (fs.existsSync(sidecarJpg)) {
-      itemCover = sidecarJpg;
-    } else if (preferSpotify && spInfo?.coverUrl) {
+    const coverExts = [".jpg", ".jpeg", ".png", ".webp"];
+    for (const ext of coverExts) {
+      const cand = `${baseNoExt}${ext}`;
+      if (fs.existsSync(cand)) { itemCover = cand; break; }
+    }
+    if (!itemCover && preferSpotify && spInfo?.coverUrl) {
       try {
         const dl = await downloadThumbnail(spInfo.coverUrl, `${baseNoExt}.spotify_cover`);
         if (dl) itemCover = dl;

@@ -2,19 +2,78 @@
   "name": "Gharmonize",
   "version": "1.0.0",
   "type": "module",
+  "main": "electron/main.mjs",
   "scripts": {
     "start": "node app.js",
-    "dev": "nodemon app.js"
+    "dev": "nodemon app.js",
+    "desktop:dev": "wait-on tcp:127.0.0.1:5174 && electron .",
+    "desktop:build:nsis": "electron-builder --win nsis --x64",
+    "desktop:build:appimage": "electron-builder --linux AppImage --x64",
+    "desktop:build:portable": "electron-builder --win portable --x64",
+    "desktop:build:all": "npm run desktop:build:nsis && npm run desktop:build:portable",
+    "postinstall": "node ./scripts/postinstall.cjs"
   },
   "dependencies": {
     "archiver": "^7.0.1",
     "dotenv": "^17.2.3",
     "express": "^4.21.2",
     "multer": "^1.4.5-lts.1",
+    "music-metadata": "^11.9.0",
     "node-fetch": "^3.3.2",
+    "node-id3": "^0.2.9",
     "spotify-web-api-node": "^5.0.2"
   },
   "devDependencies": {
-    "nodemon": "^3.1.10"
+    "cross-env": "^7.0.3",
+    "electron": "^39.1.1",
+    "electron-builder": "^26.0.12",
+    "nodemon": "^3.1.10",
+    "wait-on": "^8.0.2"
+  },
+  "build": {
+    "appId": "com.gharmonize.app",
+    "productName": "Gharmonize",
+    "icon": "build/icon.ico",
+    "asar": true,
+    "directories": {
+      "buildResources": "build"
+    },
+    "files": [
+      "electron/**",
+      "app.js",
+      "routes/**",
+      "modules/**",
+      "public/**",
+      ".env.default",
+      "config.js",
+      "package.json",
+      "cookies/**",
+      "uploads/**",
+      "outputs/**",
+      "temp/**"
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": ["x64"]
+        }
+      ],
+      "icon": "build/icon.ico"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "artifactName": "Gharmonize Setup ${version}.${ext}"
+    },
+    "linux": {
+      "target": ["AppImage"],
+      "icon": "build/icon.png"
+    },
+    "mac": {
+      "target": ["dmg"],
+      "icon": "build/icon.icns"
+    }
   }
 }

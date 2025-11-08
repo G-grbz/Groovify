@@ -105,11 +105,15 @@ export async function searchSpotifyBestTrackStrict(
   return (bestScore >= minScore) ? best : null;
 }
 
+
 export function trackToId3Meta(track) {
   if (!track) return null;
   const releaseDate = track.album?.release_date || "";
   const year = releaseDate.slice(0,4);
   const artist = (track.artists||[]).map(a=>a?.name).filter(Boolean).join(", ");
+  const albumArtist = track.album?.artists?.[0]?.name || artist || "";
+  const copyrightText = (track.album?.copyrights && track.album.copyrights[0]?.text) || "";
+  const label = track.album?.label || "";
   return {
     track: track.name || "",
     title: track.name || "",
@@ -126,7 +130,13 @@ export function trackToId3Meta(track) {
                  : null),
     isrc: track.external_ids?.isrc || "",
     coverUrl: pickBestImage(track.album?.images || []),
-    spotifyUrl: track.external_urls?.spotify || ""
+    spotifyUrl: track.external_urls?.spotify || "",
+    album_artist: albumArtist,
+    copyright: copyrightText,
+    genre: "",
+    album_id: track.album?.id || null,
+    label: label,
+    publisher: label
   };
 }
 
@@ -137,6 +147,24 @@ async function fetchTrack(api, id, market) {
   }, resolveMarket(market));
   if (!t) throw new Error("Track getirilemedi");
   const meta = trackToId3Meta(t);
+
+    let albumInfo = null, artistGenres = [];
+  try {
+    if (t.album?.id) {
+      const a = await api.getAlbum(t.album.id);
+      albumInfo = a?.body || null;
+    }
+  } catch {}
+  try {
+    if (t.artists?.[0]?.id) {
+      const ar = await api.getArtist(t.artists[0].id);
+      artistGenres = ar?.body?.genres || [];
+    }
+  } catch {}
+
+  const copyrightText = (albumInfo?.copyrights && albumInfo.copyrights[0]?.text) || "";
+  const genreStr = (albumInfo?.genres && albumInfo.genres[0]) || (artistGenres[0] || "");
+
   return {
     title: meta.title,
     artist: meta.artist,
@@ -149,12 +177,18 @@ async function fetchTrack(api, id, market) {
     disc_total: meta.disc_total,
     isrc: meta.isrc,
     spUrl: meta.spotifyUrl,
-    coverUrl: meta.coverUrl
+    coverUrl: meta.coverUrl,
+    album_artist: meta.album_artist,
+    label: albumInfo?.label || meta.label || "",
+    copyright: copyrightText || "",
+    genre: genreStr || ""
   };
 }
 
 async function fetchPlaylistItems(api, id, market) {
   const out = [];
+  const albumCache = new Map();
+  const artistCache = new Map();
   let page = await withMarketFallback(async (mkt) => {
     const r = await api.getPlaylistTracks(id, { limit: 100, ...(mkt ? { market: mkt } : {}) });
     return r || null;
@@ -166,6 +200,31 @@ async function fetchPlaylistItems(api, id, market) {
       if (!t) continue;
       const meta = trackToId3Meta(t);
       if (meta?.title && meta?.artist) {
+        let albumInfo = null, artistGenres = [];
+        try {
+          const albId = t.album?.id;
+          if (albId) {
+            if (albumCache.has(albId)) albumInfo = albumCache.get(albId);
+            else {
+              const a = await api.getAlbum(albId);
+              albumInfo = a?.body || null;
+              albumCache.set(albId, albumInfo);
+            }
+          }
+        } catch {}
+        try {
+          const arId = t.artists?.[0]?.id;
+          if (arId) {
+            if (artistCache.has(arId)) artistGenres = artistCache.get(arId);
+            else {
+              const ar = await api.getArtist(arId);
+              artistGenres = ar?.body?.genres || [];
+              artistCache.set(arId, artistGenres);
+            }
+          }
+        } catch {}
+        const copyrightText = (albumInfo?.copyrights && albumInfo.copyrights[0]?.text) || "";
+        const genreStr = (albumInfo?.genres && albumInfo.genres[0]) || (artistGenres[0] || "");
         out.push({
           title: meta.title,
           artist: meta.artist,
@@ -178,7 +237,11 @@ async function fetchPlaylistItems(api, id, market) {
           disc_total: meta.disc_total,
           isrc: meta.isrc,
           coverUrl: meta.coverUrl,
-          spUrl: meta.spotifyUrl
+          spUrl: meta.spotifyUrl,
+          album_artist: meta.album_artist,
+          label: albumInfo?.label || meta.label || "",
+          copyright: copyrightText || "",
+          genre: genreStr || ""
         });
       }
     }
@@ -216,7 +279,10 @@ async function fetchAlbumItems(api, id, market) {
         artist: albumData.artists?.[0]?.name || "",
         release_date: albumData.release_date || "",
         total_tracks: albumData.total_tracks,
-        coverUrl: pickBestImage(albumData.images || [])
+        coverUrl: pickBestImage(albumData.images || []),
+        label: albumData.label || "",
+        genres: albumData.genres || [],
+        copyrights: albumData.copyrights || []
       };
     }
   } catch (e) {
@@ -231,7 +297,9 @@ async function fetchAlbumItems(api, id, market) {
           name: albumInfo?.name || "",
           release_date: albumInfo?.release_date || "",
           total_tracks: albumInfo?.total_tracks || null,
-          images: albumInfo?.coverUrl ? [{ url: albumInfo.coverUrl }] : []
+          images: albumInfo?.coverUrl ? [{ url: albumInfo.coverUrl }] : [],
+          artists: [{ name: albumInfo?.artist || "" }],
+          label: albumInfo?.label || null
         }
       });
 
@@ -248,7 +316,11 @@ async function fetchAlbumItems(api, id, market) {
           disc_total: meta.disc_total,
           isrc: meta.isrc,
           coverUrl: albumInfo?.coverUrl,
-          spUrl: `https://open.spotify.com/track/${track.id}`
+          spUrl: `https://open.spotify.com/track/${track.id}`,
+          album_artist: albumInfo?.artist || meta.album_artist || "",
+          label: albumInfo?.label || "",
+          copyright: (albumInfo?.copyrights && albumInfo.copyrights[0]?.text) || "",
+          genre: (albumInfo?.genres && albumInfo.genres[0]) || ""
         });
       }
     }
@@ -328,4 +400,47 @@ export async function resolveSpotifyUrl(url, { market } = {}) {
   }
 
   throw new Error("Bu Spotify URL tipi henüz destekli değil");
+}
+
+export async function findSpotifyMetaByQuery(artist, title, market) {
+  const api = await makeSpotify();
+  const q = [artist, title].filter(Boolean).join(" ").trim();
+  const res = await withMarketFallback(async (mkt) => {
+    const r = await api.searchTracks(q, { limit: 1, ...(mkt ? { market: mkt } : {}) });
+    return r?.body || null;
+  }, resolveMarket(market));
+
+  const item = res?.tracks?.items?.[0];
+  if (!item) return null;
+  let album = null, leadArtist = null;
+  try {
+    if (item.album?.id) {
+      album = (await api.getAlbum(item.album.id, { ...(market ? { market: resolveMarket(market) } : {}) }))?.body || null;
+    }
+  } catch {}
+  try {
+    if (item.artists?.[0]?.id) {
+      leadArtist = (await api.getArtist(item.artists[0].id))?.body || null;
+    }
+  } catch {}
+
+  const genres = (album?.genres?.length ? album.genres : (leadArtist?.genres || [])) || [];
+  const copyrightText = (album?.copyrights && album.copyrights[0]?.text) || "";
+
+  return {
+    title: item.name || "",
+    track: item.name || "",
+    artist: (item.artists || []).map(a => a?.name).filter(Boolean).join(", "),
+    album: item.album?.name || "",
+    album_artist: item.album?.artists?.[0]?.name || item.artists?.[0]?.name || "",
+    release_year: (item.album?.release_date || "").slice(0, 4),
+    release_date: item.album?.release_date || "",
+    isrc: item.external_ids?.isrc || "",
+    coverUrl: pickBestImage(album?.images || []),
+    webpage_url: item.external_urls?.spotify || "",
+    genre: genres[0] || "",
+    label: album?.label || "",
+    publisher: album?.label || "",
+    copyright: copyrightText
+  };
 }
