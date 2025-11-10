@@ -125,22 +125,22 @@ export class LyricsFetcher {
       let lyricsContent = "";
 
       if (lyricsData.syncedLyrics) {
-        lyricsContent = lyricsData.syncedLyrics;
-        const usingSyncedLogMsg = {
-          logKey: "log.lyrics.usingSynced",
-          logVars: { title },
-          fallback: `🎵 Zamanlı (synced) sözler kullanılıyor: ${title}`,
-        };
-        emitLog(onLog, usingSyncedLogMsg);
-      } else if (lyricsData.plainLyrics) {
-        lyricsContent = this.convertToLRC(lyricsData.plainLyrics);
-        const usingPlainLogMsg = {
-          logKey: "log.lyrics.usingPlain",
-          logVars: { title },
-          fallback: `📝 Düz metin sözler LRC'ye dönüştürüldü: ${title}`,
-        };
-        emitLog(onLog, usingPlainLogMsg);
-      }
+      lyricsContent = lyricsData.syncedLyrics;
+      const usingSyncedLogMsg = {
+        logKey: "log.lyrics.usingSynced",
+        logVars: { title },
+        fallback: `🎵 Zamanlı (synced) sözler kullanılıyor: ${title}`,
+      };
+      emitLog(onLog, usingSyncedLogMsg);
+    } else if (lyricsData.plainLyrics) {
+      lyricsContent = lyricsData.plainLyrics;
+      const usingPlainLogMsg = {
+        logKey: "log.lyrics.usingPlain",
+        logVars: { title },
+        fallback: `📝 Düz metin sözler (plain) kullanılıyor: ${title}`,
+      };
+      emitLog(onLog, usingPlainLogMsg);
+    }
 
       if (!lyricsContent.trim()) {
         const emptyContentLogMsg = {

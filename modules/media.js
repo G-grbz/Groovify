@@ -142,18 +142,30 @@ export async function convertMedia(
   const isCanceled =
     typeof opts.isCanceled === "function" ? () => !!opts.isCanceled() : () => false;
 
-  const parseSR = (v) => {
+    const stereoConvert = opts?.stereoConvert || "auto";
+    const atempoAdjust = opts?.atempoAdjust || "none";
+
+    const parseSR = (v) => {
     const n = Number(String(v || "").replace(/[^0-9.]/g, ""));
     return Number.isFinite(n) ? Math.round(n) : NaN;
   };
+
+  const isEac3Ac3 = format === "eac3" || format === "ac3";
   const srOpt1 = parseSR(opts?.sampleRate);
   const srOpt2 = parseSR(opts?.sampleRateHz);
   const srEnv = parseSR(process.env.TARGET_SAMPLE_RATE);
-  const SAMPLE_RATE =
-    Number.isFinite(srOpt1) ? srOpt1
-    : Number.isFinite(srOpt2) ? srOpt2
-    : Number.isFinite(srEnv) ? srEnv
-    : 48000;
+  let SAMPLE_RATE;
+   if (isEac3Ac3) {
+       SAMPLE_RATE = Number.isFinite(srOpt1) ? srOpt1
+           : Number.isFinite(srOpt2) ? srOpt2
+           : Number.isFinite(srEnv) ? srEnv
+           : 48000;
+   } else {
+       SAMPLE_RATE = Number.isFinite(srOpt1) ? srOpt1
+           : Number.isFinite(srOpt2) ? srOpt2
+           : Number.isFinite(srEnv) ? srEnv
+           : 48000;
+   }
 
   const SAFE_SR = Math.min(192000, Math.max(8000, SAMPLE_RATE));
 
@@ -165,6 +177,7 @@ export async function convertMedia(
     if (f === "flac" || f === "ogg") return "DESCRIPTION";
     if (f === "mp4" || f === "m4a") return "comment";
     if (f === "mp3") return "comment";
+    if (f === "eac3" || f === "ac3") return "comment";
     return "comment";
   }
   const COMMENT_KEY = commentKeyFor(format);
@@ -191,9 +204,9 @@ export async function convertMedia(
     : "default";
 
   console.log(
-    `🎵 Dönüştürme başladı → giriş: ${path.basename(inputPath)} | biçim: ${format} | söz eklensin: ${
+    `🎵 Dönüştürme → in: ${path.basename(inputPath)} | fmt=${format} | lyrics=${
       opts.includeLyrics !== false ? "evet" : "hayır"
-    } | video: ${isVideo ? "evet" : "hayır"} | sr: ${SAMPLE_RATE} Hz (src=${srSrc} → norm=${SR_NORM} ${SR_NOTE})`
+    } | video=${isVideo ? "evet" : "hayır"} | sr=${SAMPLE_RATE}Hz (src=${srSrc}→${SR_NORM} ${SR_NOTE}) | stereo=${stereoConvert} | atempo=${atempoAdjust}`
   );
 
   const template = isVideo
@@ -362,12 +375,56 @@ export async function convertMedia(
             args.push("-acodec", "libvorbis", "-b:a", bitrate, "-ar", String(SR_NORM));
           }
           break;
+          case "eac3":
+          case "ac3":
+          args.push("-acodec", format, "-b:a", bitrate, "-ar", String(SR_NORM));
+          if (stereoConvert === "force") args.push("-ac", "2");
+          break;
+      }
+    }
+
+    if (!isVideo && atempoAdjust !== "none") {
+      const ratioTable = {
+        "24000_23976": 24000 / 23976,
+        "25_24": 24 / 25,
+        "25_23976": 23976 / 25000,
+        "30_23976": 23976 / 30000,
+        "30_24": 24 / 30,
+        "24000_25000": 25000 / 24000,
+        "23976_24000": 24000 / 23976,
+        "23976_25000": 25000 / 23976,
+        "30000_23976": 23976 / 30000,
+        "30000_25000": 25000 / 30000
+      };
+
+      const target = ratioTable[atempoAdjust];
+      if (Number.isFinite(target) && target > 0) {
+        const splitAtempo = (f) => {
+          const parts = [];
+          let x = f;
+          while (x < 0.5) {
+            parts.push(0.5);
+            x = x / 0.5;
+          }
+          while (x > 2.0) {
+            parts.push(2.0);
+            x = x / 2.0;
+          }
+          parts.push(x);
+          return parts.map(v => +v.toFixed(6));
+        };
+
+        const chain = splitAtempo(target);
+        if (chain.length) {
+          const expr = chain.map(v => `atempo=${v}`).join(",");
+          args.push("-af", expr);
+        }
       }
     }
 
     args.push(outputPath);
 
-    console.log("🔧 FFmpeg argümanları:", args);
+    console.log("🔧 FFmpeg argümanları:", args.join(" "));
 
     let triedFallback = false;
     let ffmpeg = spawn(ffmpegBin, args);

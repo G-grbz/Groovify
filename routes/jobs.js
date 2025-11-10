@@ -45,7 +45,7 @@ const storage = multer.diskStorage({
 });
 const upload = multer({
   storage,
-  limits: { fileSize: 100 * 1024 * 1024 }
+  limits: { fileSize: 1000 * 1024 * 1024 }
 });
 
 const router = express.Router();
@@ -156,7 +156,9 @@ router.post("/api/jobs", upload.single("file"), async (req, res) => {
       selectedIndices,
       clientBatch,
       spotifyMapId,
-      includeLyrics = false
+      includeLyrics = false,
+      stereoConvert = "auto",
+      atempoAdjust = "none"
     } = req.body || {};
 
     const parseSR = (v) => {
@@ -171,7 +173,7 @@ router.post("/api/jobs", upload.single("file"), async (req, res) => {
                      : Number.isFinite(parseSR(sampleRateHz)) ? parseSR(sampleRateHz)
                      : 48000;
 
-    const supported = ["mp3","flac","wav","ogg","mp4"];
+    const supported = ["mp3","flac","wav","ogg","mp4","eac3","ac3"];
     if (!supported.includes(format)) {
       return sendError(res, ERR.INVALID_FORMAT, "Unsupported format", 400);
     }
@@ -336,7 +338,9 @@ else if (isYouTubeUrl(url)) {
       sampleRate: pickedSR,
       metadata: {
         ...metadata,
-        includeLyrics: includeLyrics === true || includeLyrics === "true"
+        includeLyrics: includeLyrics === true || includeLyrics === "true",
+        stereoConvert: stereoConvert,
+        atempoAdjust: atempoAdjust
       },
       resultPath: null,
       error: null,

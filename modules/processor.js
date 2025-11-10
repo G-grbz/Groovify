@@ -110,7 +110,8 @@ export async function processJob(jobId, inputPath, format, bitrate) {
     job.currentPhase = "preparing";
     job.metadata = job.metadata || {};
     job.counters = job.counters || { dlTotal: 0, dlDone: 0, cvTotal: 0, cvDone: 0 };
-    if (format === "mp4" && job.metadata?.source === "youtube") {
+    const isVideoFormat = format === "mp4";
+    if (isVideoFormat && job.metadata?.source === "youtube") {
       await processYouTubeVideoJob(job, { OUTPUT_DIR, TEMP_DIR });
       try {
         if (Array.isArray(job.resultPath) && job.resultPath.length > 1 && !job.clientBatch) {
@@ -263,7 +264,9 @@ export async function processJob(jobId, inputPath, format, bitrate) {
               sampleRate: sampleRate,
               isCanceled: () => !!jobs.get(jobId)?.canceled,
               onLog: handleLyricsLog,
-              onLyricsStats: handleLyricsStats
+              onLyricsStats: handleLyricsStats,
+              stereoConvert: job.metadata?.stereoConvert || "auto",
+              atempoAdjust: job.metadata?.atempoAdjust || "none"
             }
           );
         }
@@ -603,7 +606,9 @@ export async function processJob(jobId, inputPath, format, bitrate) {
                 sampleRate: sampleRate,
                 isCanceled: () => !!jobs.get(jobId)?.canceled,
                 onLog: handleLyricsLog,
-                onLyricsStats: handleLyricsStats
+                onLyricsStats: handleLyricsStats,
+                stereoConvert: job.metadata?.stereoConvert || "auto",
+                atempoAdjust: job.metadata?.atempoAdjust || "none"
               }
             );
           }
@@ -677,6 +682,7 @@ export async function processJob(jobId, inputPath, format, bitrate) {
     }
 
     const isVideo = format === "mp4";
+    const isEac3Ac3 = format === "eac3" || format === "ac3";
     if (!coverPath && typeof actualInputPath === "string") {
       const baseNoExt = actualInputPath.replace(/\.[^.]+$/, "");
       const sidecar = `${baseNoExt}.jpg`;
@@ -734,7 +740,9 @@ export async function processJob(jobId, inputPath, format, bitrate) {
             sampleRate: sampleRate,
             isCanceled: () => !!jobs.get(jobId)?.canceled,
             onLog: handleLyricsLog,
-            onLyricsStats: handleLyricsStats
+            onLyricsStats: handleLyricsStats,
+            stereoConvert: job.metadata?.stereoConvert || "auto",
+            atempoAdjust: job.metadata?.atempoAdjust || "none"
           }
         );
 
