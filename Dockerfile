@@ -26,7 +26,6 @@ COPY . .
 
 ENV NODE_ENV=production \
     PORT=5174 \
-    ENV_DEFAULT_PATH=/usr/src/app/.env.default \
     YTDLP_BIN=/usr/local/bin/yt-dlp
 
 RUN mkdir -p uploads outputs temp cookies && chmod -R 0775 /usr/src/app
