@@ -164,13 +164,20 @@ export async function processJob(jobId, inputPath, format, bitrate) {
         selectedIds,
         TEMP_DIR,
         (progress) => {
-          job.downloadProgress = 20 + (progress * 0.8);
-          const t = Number(job.counters?.dlTotal || selectedIds.length || 0);
-          if (t > 0) {
-            const approx = clampInt((job.downloadProgress / 100) * t, 0, t);
-            if ((job.counters.dlDone || 0) < approx) job.counters.dlDone = approx;
-          }
-          job.progress = Math.floor((job.downloadProgress + job.convertProgress) / 2);
+          if (progress && typeof progress === 'object' && progress.__event && progress.type === 'file-done') {
+              const t = Number(progress.total || job.counters?.dlTotal || selectedIds.length || 0);
+              job.counters.dlTotal = t;
+              job.counters.dlDone = Math.min(t, Number(progress.downloaded || 0));
+              job.downloadProgress = Math.floor((job.counters.dlDone / Math.max(1, t)) * 100);
+            } else {
+              job.downloadProgress = 20 + (Number(progress || 0) * 0.8);
+              const t = Number(job.counters?.dlTotal || selectedIds.length || 0);
+              if (t > 0) {
+               const approx = clampInt((Number(progress || 0) / 100) * t, 0, t);
+                if ((job.counters.dlDone || 0) < approx) job.counters.dlDone = approx;
+              }
+            }
+            job.progress = Math.floor((job.downloadProgress + job.convertProgress) / 2);
         },
         {
           video: (format === "mp4"),
@@ -391,25 +398,37 @@ export async function processJob(jobId, inputPath, format, bitrate) {
         const selectedIds = selectedIdsVar;
 
         const files = await downloadYouTubeVideo(
-          job.metadata.url,
-          jobId,
-          true,
-          indices,
-          isAutomix,
-          selectedIds,
-          TEMP_DIR,
-          (progress) => {
-            job.downloadProgress = Math.max(10, Math.min(100, 10 + (progress * 0.9)));
-            const t = Number(job.counters?.dlTotal || job.playlist?.total || 0);
-            if (t > 0) {
-              const approx = clampInt((job.downloadProgress / 100) * t, 0, t);
-              if ((job.counters.dlDone || 0) < approx) job.counters.dlDone = approx;
-            }
-            if (job.playlist && job.currentPhase === 'downloading') {
-              job.playlist.current = Math.max(0, Math.min(t - 1, Math.floor((progress / 100) * t)));
+        job.metadata.url,
+        jobId,
+        true,
+        indices,
+        isAutomix,
+        selectedIds,
+        TEMP_DIR,
+        (progress) => {
+          const totalGuess = Number(job.counters?.dlTotal || job.playlist?.total || 0);
+            if (progress && typeof progress === 'object' && progress.__event && progress.type === 'file-done') {
+             const t = Number(progress.total || totalGuess || 0);
+              job.counters.dlTotal = t || totalGuess;
+              job.counters.dlDone = Math.min(job.counters.dlTotal || t, Number(progress.downloaded || 0));
+              job.downloadProgress = Math.max(10, Math.min(100, 10 + ((job.counters.dlDone / Math.max(1, (job.counters.dlTotal || t || 1))) * 90)));
+              if (job.playlist && job.currentPhase === 'downloading') {
+                job.playlist.current = Math.max(0, (job.counters.dlDone - 1));
+              }
+            } else {
+              const pct = Number(progress || 0);
+              job.downloadProgress = Math.max(10, Math.min(100, 10 + (pct * 0.9)));
+              const t = totalGuess;
+             if (t > 0) {
+                const approx = clampInt((pct / 100) * t, 0, t);
+                if ((job.counters.dlDone || 0) < approx) job.counters.dlDone = approx;
+                if (job.playlist && job.currentPhase === 'downloading') {
+                  job.playlist.current = Math.max(0, Math.min(t - 1, approx - 1));
+                }
+              }
             }
             job.progress = Math.floor((job.downloadProgress + job.convertProgress) / 2);
-          },
+        },
           {
             video: (format === "mp4"),
             onSkipUpdate: handleSkipUpdate,

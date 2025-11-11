@@ -597,22 +597,33 @@ async function downloadSelectedIds(ytDlpBin, selectedIds, jobId, tempDir, progre
     const totalCount = selectedIds.length;
 
     child.stdout.on('data', (data) => {
-      if (abortIfCanceled()) return;
-      const line = data.toString();
-      if (ERROR_WORD.test(line) || SKIP_RE.test(line)) bumpSkip(line);
-      if (line.includes('[download]') && line.includes('%')) {
-        const percentMatch = line.match(/(\d+\.\d+)%/);
-        if (percentMatch) {
-          const fileProgress = parseFloat(percentMatch[1]);
-          const overallProgress = (downloadedCount / totalCount) * 100 + (fileProgress / totalCount);
-          if (progressCallback) progressCallback(overallProgress);
-        }
-      }
-      if (line.includes('[download] Destination:')) {
-        downloadedCount++;
-        if (progressCallback) progressCallback((downloadedCount / totalCount) * 100);
-      }
+    if (abortIfCanceled()) return;
+    const line = data.toString();
+    if (ERROR_WORD.test(line) || SKIP_RE.test(line)) bumpSkip(line);
+    if (line.includes('[download] Destination:')) {
+      downloadedCount++;
+      const progress = (downloadedCount / totalCount) * 100;
+      if (progressCallback) progressCallback(progress);
+      emitEvent(progressCallback, opts, {
+      type: 'file-done',
+      downloaded: downloadedCount,
+      total: totalCount,
+      jobId
     });
+    }
+  });
+
+  child.stderr.on('data', (data) => {
+    if (abortIfCanceled()) return;
+    const line = data.toString();
+    stderrBuf += line;
+    if (ERROR_WORD.test(line) || SKIP_RE.test(line)) bumpSkip(line);
+    if (line.includes('[download] Destination:')) {
+      downloadedCount++;
+      const progress = (downloadedCount / totalCount) * 100;
+      if (progressCallback) progressCallback(progress);
+    }
+  });
 
     child.stderr.on('data', (data) => {
       if (abortIfCanceled()) return;
@@ -858,51 +869,36 @@ async function downloadStandard(
     };
 
     const handleLine = (line) => {
-      if (ERROR_WORD.test(line) || SKIP_RE.test(line)) bumpSkipStd(line);
-      if (line.includes("[download]") && pctRe.test(line)) {
-        const m = line.match(pctRe);
-        if (m) {
-          curFilePct = parseFloat(m[1]) || 0;
-          bumpProgress();
-        }
-      }
-      if (itemRe.test(line)) {
-        const m2 = line.match(itemRe);
-        const idx = parseInt(m2[1], 10);
-        const tot = parseInt(m2[2], 10);
-        if (Number.isFinite(tot) && tot > 0) seenTotal = tot;
-        if (Number.isFinite(idx)) {
-          currentFileIndex = idx;
-          seenIndex = Math.max(seenIndex, idx - 1);
-          curFilePct = 0;
-          bumpProgress();
-        }
-      }
+    if (ERROR_WORD.test(line) || SKIP_RE.test(line)) bumpSkipStd(line);
+    if (destinationRe.test(line)) {
+      downloadedFiles++;
+      currentFileIndex = downloadedFiles;
 
-      if (destinationRe.test(line)) {
-       downloadedFiles++;
-       currentFileIndex = downloadedFiles;
-       curFilePct = 100;
-       bumpProgress();
-     }
-
-     if (downloadCompleteRe.test(line)) {
-       const m = line.match(downloadCompleteRe);
-       if (m) {
-         curFilePct = parseFloat(m[1]) || 0;
-         bumpProgress();
-       }
-     }
-
-      if (/\[download\]\s+Destination:/i.test(line)) {
-        if (isPlaylist || isAutomix) {
-          seenIndex += 1;
-          curFilePct = 0;
-          bumpProgress();
-        } else {
-        }
+      if (isPlaylist || isAutomix) {
+        const total = seenTotal || downloadedFiles;
+        const progress = (downloadedFiles / total) * 100;
+        if (progressCallback) progressCallback(progress);
+        emitEvent(progressCallback, opts, {
+      type: 'file-done',
+      downloaded: downloadedFiles,
+      total: total,
+      jobId
+    });
+      } else {
+        if (progressCallback) progressCallback(100);
       }
-    };
+    }
+    if (itemRe.test(line)) {
+      const m2 = line.match(itemRe);
+      const idx = parseInt(m2[1], 10);
+      const tot = parseInt(m2[2], 10);
+      if (Number.isFinite(tot) && tot > 0) seenTotal = tot;
+      if (Number.isFinite(idx)) {
+        currentFileIndex = idx;
+        seenIndex = Math.max(seenIndex, idx - 1);
+      }
+    }
+  };
 
     child.stdout.on("data", (d) => {
       if (abortIfCanceled()) return;

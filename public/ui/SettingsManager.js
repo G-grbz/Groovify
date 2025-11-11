@@ -43,7 +43,7 @@ export class SettingsManager {
     getLoginViewHTML() {
         return `
             <div id="loginView">
-                <label class="settings-field-label" data-i18n="settings.adminPassword">Yönetici Şifresi</label>
+                <label for="adminPass" class="settings-field-label" data-i18n="settings.adminPassword">Yönetici Şifresi</label>
                 <input id="adminPass" type="password" class="settings-input" autofocus />
                 <div id="adminError" class="settings-error" aria-live="polite" style="display:none"></div>
                 <div class="settings-actions settings-actions--end">
@@ -57,97 +57,97 @@ export class SettingsManager {
         return `
             <div id="formView" style="display:none">
                 <div class="form-group">
-                    <label data-i18n="settings.spotifyClientId">SPOTIFY_CLIENT_ID</label>
+                    <label for="f_SPOTIFY_CLIENT_ID" data-i18n="settings.spotifyClientId">SPOTIFY_CLIENT_ID</label>
                     <input id="f_SPOTIFY_CLIENT_ID" type="text" >
                 </div>
                 <div class="form-group">
-                    <label data-i18n="settings.spotifyClientSecret">SPOTIFY_CLIENT_SECRET</label>
+                    <label for="f_SPOTIFY_CLIENT_SECRET" data-i18n="settings.spotifyClientSecret">SPOTIFY_CLIENT_SECRET</label>
                     <input id="f_SPOTIFY_CLIENT_SECRET" type="password" placeholder="••••••••" data-i18n-ph="ph.spotifyClientSecret" >
                 </div>
                 <div class="form-group">
-                    <label data-i18n="settings.spotifyMarket">SPOTIFY_MARKET</label>
+                    <label for="f_SPOTIFY_MARKET" data-i18n="settings.spotifyMarket">SPOTIFY_MARKET</label>
                     <input id="f_SPOTIFY_MARKET" type="text" placeholder="TR, US, GB vb." data-i18n-ph="ph.spotifyMarket" >
                 </div>
                 <div class="form-group">
-                    <label data-i18n="settings.spotifyFallbackMarkets">SPOTIFY_FALLBACK_MARKETS</label>
+                    <label for="f_SPOTIFY_FALLBACK_MARKETS" data-i18n="settings.spotifyFallbackMarkets">SPOTIFY_FALLBACK_MARKETS</label>
                     <input id="f_SPOTIFY_FALLBACK_MARKETS" type="text" placeholder="US,GB,DE,FR" data-i18n-ph="ph.spotifyFallbackMarkets" >
                 </div>
                 <div class="form-group">
-                    <label data-i18n="settings.ytUseMusic">YT_USE_MUSIC</label>
+                    <label for="f_YT_USE_MUSIC" data-i18n="settings.ytUseMusic">YT_USE_MUSIC</label>
                     <select id="f_YT_USE_MUSIC">
                         <option value="1">1</option>
                         <option value="0">0</option>
                     </select>
                 </div>
                 <div class="form-group">
-                    <label data-i18n="settings.preferSpotifyTags">PREFER_SPOTIFY_TAGS</label>
+                    <label for="f_PREFER_SPOTIFY_TAGS" data-i18n="settings.preferSpotifyTags">PREFER_SPOTIFY_TAGS</label>
                     <select id="f_PREFER_SPOTIFY_TAGS">
                         <option value="1">1</option>
                         <option value="0">0</option>
                     </select>
                 </div>
                 <div class="form-group">
-                    <label data-i18n="settings.titleCleanPipe">TITLE_CLEAN_PIPE</label>
+                    <label for="f_TITLE_CLEAN_PIPE" data-i18n="settings.titleCleanPipe">TITLE_CLEAN_PIPE</label>
                     <select id="f_TITLE_CLEAN_PIPE">
                         <option value="1">1</option>
                         <option value="0">0</option>
                     </select>
                 </div>
                 <div class="form-group">
-                    <label data-i18n="settings.ytdlpBin">YTDLP_BIN</label>
+                    <label for="f_YTDLP_BIN" data-i18n="settings.ytdlpBin">YTDLP_BIN</label>
                     <input id="f_YTDLP_BIN" type="text" placeholder="'C:/tools/yt-dlp.exe'" data-i18n-ph="ph.ytdlpBin">
                 </div>
                 <div class="form-group">
-                    <label data-i18n="settings.ytDefaultRegion">YT_DEFAULT_REGION</label>
+                    <label for="f_YT_DEFAULT_REGION" data-i18n="settings.ytDefaultRegion">YT_DEFAULT_REGION</label>
                     <input id="f_YT_DEFAULT_REGION" type="text" placeholder="ör: TR, US (boş = kapalı)" data-i18n-ph="ph.ytDefaultRegion" >
                 </div>
                 <div class="form-group">
-                    <label data-i18n="settings.ytLang">YT_LANG</label>
+                    <label for="f_YT_LANG" data-i18n="settings.ytLang">YT_LANG</label>
                     <input id="f_YT_LANG" type="text" placeholder="en-US, tr-TR ..." data-i18n-ph="ph.ytLang" >
                 </div>
                 <div class="form-group">
-                    <label data-i18n="settings.ytAcceptLang">YT_ACCEPT_LANGUAGE</label>
+                    <label for="f_YT_ACCEPT_LANGUAGE" data-i18n="settings.ytAcceptLang">YT_ACCEPT_LANGUAGE</label>
                     <input id="f_YT_ACCEPT_LANGUAGE" type="text" placeholder="en-US,en;q=0.8 (opsiyonel)" data-i18n-ph="ph.ytAcceptLang" >
                 </div>
                 <div class="form-group">
-                    <label data-i18n="settings.ytForceIpv4">YT_FORCE_IPV4</label>
+                    <label for="f_YT_FORCE_IPV4" data-i18n="settings.ytForceIpv4">YT_FORCE_IPV4</label>
                     <select id="f_YT_FORCE_IPV4">
                         <option value="1">1</option>
                         <option value="0">0</option>
                     </select>
                 </div>
                 <div class="form-group">
-                    <label data-i18n="settings.enrichSpforYy">ENRICH_SPOTIFY_FOR_YT</label>
+                    <label for="f_ENRICH_SPOTIFY_FOR_YT" data-i18n="settings.enrichSpforYy">ENRICH_SPOTIFY_FOR_YT</label>
                     <select id="f_ENRICH_SPOTIFY_FOR_YT">
                         <option value="1">1</option>
                         <option value="0">0</option>
                     </select>
                 </div>
                 <div class="form-group">
-                    <label data-i18n="settings.mediaComment">MEDIA_COMMENT</label>
+                    <label for="f_MEDIA_COMMENT" data-i18n="settings.mediaComment">MEDIA_COMMENT</label>
                     <input id="f_MEDIA_COMMENT" type="text" placeholder="Gharmonize" data-i18n-ph="ph.mediaComment">
                 </div>
                 <div class="form-group">
-                    <label data-i18n="settings.ffmpegBin">FFMPEG_BIN</label>
+                    <label for="f_FFMPEG_BIN" data-i18n="settings.ffmpegBin">FFMPEG_BIN</label>
                     <input id="f_FFMPEG_BIN" type="text" placeholder='' data-i18n-ph="ph.ffmpegBin">
                 </div>
                 <div class="form-group">
-                    <label data-i18n="settings.workarounds">YT_403_WORKAROUNDS</label>
+                    <label for="f_YT_403_WORKAROUNDS" data-i18n="settings.workarounds">YT_403_WORKAROUNDS</label>
                     <select id="f_YT_403_WORKAROUNDS">
                         <option value="1">1</option>
                         <option value="0">0</option>
                     </select>
                 </div>
                 <div class="form-group">
-                    <label data-i18n="settings.ytdlpUA">YTDLP_UA</label>
+                   <label for="f_YTDLP_UA" data-i18n="settings.ytdlpUA">YTDLP_UA</label>
                     <input id="f_YTDLP_UA" type="text" placeholder="User-Agent (opsiyonel)" data-i18n-ph="ph.ytdlpUA" >
                 </div>
                 <div class="form-group">
-                    <label data-i18n="settings.ytdlpCookies">YTDLP_COOKIES</label>
+                    <label for="f_YTDLP_COOKIES" data-i18n="settings.ytdlpCookies">YTDLP_COOKIES</label>
                     <input id="f_YTDLP_COOKIES" type="text" placeholder="/path/to/cookies.txt (opsiyonel)" data-i18n-ph="ph.ytdlpCookies" >
                 </div>
                 <div class="form-group">
-                    <label data-i18n="settings.ytdlpBrowser">YTDLP_COOKIES_FROM_BROWSER</label>
+                    <label for="f_YTDLP_COOKIES_FROM_BROWSER" data-i18n="settings.ytdlpBrowser">YTDLP_COOKIES_FROM_BROWSER</label>
                     <select id="f_YTDLP_COOKIES_FROM_BROWSER">
                         <option value="">(kapalı)</option>
                         <option value="chrome">chrome</option>
@@ -157,11 +157,11 @@ export class SettingsManager {
                     </select>
                 </div>
                 <div class="form-group">
-                    <label data-i18n="settings.ytdlpExtra">YTDLP_EXTRA</label>
+                    <label for="f_YTDLP_EXTRA" data-i18n="settings.ytdlpExtra">YTDLP_EXTRA</label>
                     <input id="f_YTDLP_EXTRA" type="text" placeholder="Ek argümanlar, ör: --http-chunk-size 10M" data-i18n-ph="ph.ytdlpExtra" >
                 </div>
                 <div class="form-group">
-                    <label data-i18n="settings.ytdlpSCookies">YT_STRIP_COOKIES</label>
+                    <label for="f_YT_STRIP_COOKIES" data-i18n="settings.ytdlpSCookies">YT_STRIP_COOKIES</label>
                     <select id="f_YT_STRIP_COOKIES">
                         <option value="0">0</option>
                         <option value="1">1</option>
@@ -169,15 +169,15 @@ export class SettingsManager {
                 </div>
                 <h4 class="settings-section-title" data-i18n="settings.adminPassword">Yönetici Şifresi</h4>
                 <div class="form-group">
-                    <label class="settings-field-label" data-i18n="settings.currentPassword">Eski Şifre</label>
+                    <label for="f_ADMIN_OLD" class="settings-field-label" data-i18n="settings.currentPassword">Eski Şifre</label>
                     <input id="f_ADMIN_OLD" type="password" placeholder="••••••••" data-i18n-ph="settings.currentPassword" />
                 </div>
                 <div class="form-group">
-                    <label class="settings-field-label" data-i18n="settings.newPassword">Yeni Şifre</label>
+                    <label for="f_ADMIN_NEW" class="settings-field-label" data-i18n="settings.newPassword">Yeni Şifre</label>
                     <input id="f_ADMIN_NEW" type="password" placeholder="En az 6 karakter" data-i18n-ph="settings.newPassword" />
                 </div>
                 <div class="form-group">
-                    <label class="settings-field-label" data-i18n="settings.newPassword2">Yeni Şifre (Tekrar)</label>
+                    <label for="f_ADMIN_NEW2" class="settings-field-label" data-i18n="settings.newPassword2">Yeni Şifre (Tekrar)</label>
                     <input id="f_ADMIN_NEW2" type="password" placeholder="Yeni Şifre (Tekrar)" data-i18n-ph="settings.newPassword2" />
                 </div>
                 <div class="settings-actions settings-actions--end">

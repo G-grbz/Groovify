@@ -273,8 +273,8 @@ function buildAndShowContextMenu(win, params) {
 
 function createWindow() {
   const win = new BrowserWindow({
-    width: 720,
-    height: 480,
+    width: 1280,
+    height: 720,
     minWidth: 720,
     minHeight: 480,
     title: 'Gharmonize',

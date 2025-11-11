@@ -165,15 +165,19 @@ export class MediaConverterApp {
             container.id = 'eac3Ac3Options';
             container.className = 'form-group';
             container.innerHTML = `
-                <label data-i18n="label.stereoConvert">Kanal Ayarları:</label>
-                <select id="stereoConvertSelect">
-                    <option value="auto" data-i18n="option.auto">Orijinal Kanal Sayısını Koru</option>
-                    <option value="force" data-i18n="option.forceStereo">Stereo'ya Dönüştür (2 Kanal)</option>
-                </select>
+                <div class="form-group">
+                      <label for="stereoConvertSelect" data-i18n="label.stereoConvert">Kanal Ayarları:</label>
+                      <select id="stereoConvertSelect">
+                        <option value="auto" data-i18n="option.auto">Orijinal Kanal Sayısını Koru</option>
+                        <option value="force" data-i18n="option.forceStereo">Stereo'ya Dönüştür (2 Kanal)</option>
+                      </select>
+                    </div>
 
-                <label data-i18n="label.atempoAdjust">Ses Hızı Düzeltme (FPS Uyumu):</label>
+            <div class="form-group">
+                <label for="atempoSelect" data-i18n="label.atempoAdjust">Ses Hızı Düzeltme (FPS Uyumu):</label>
                 <select id="atempoSelect">
                   <option value="none" data-i18n="option.none">Ses hızını değiştirme</option>
+                  <option value="23976_24000" data-i18n="option.23976_24000">23.976 FPS → 24 FPS (TV/stream → sinema)</option>
                   <option value="23976_24000" data-i18n="option.23976_24000">23.976 FPS → 24 FPS (TV/stream → sinema)</option>
                   <option value="23976_25000" data-i18n="option.23976_25000">23.976 FPS → 25 FPS (NTSC → PAL TV)</option>
                   <option value="24000_23976" data-i18n="option.24000_23976">24 FPS → 23.976 FPS (sinema → TV/stream)</option>
@@ -184,6 +188,7 @@ export class MediaConverterApp {
                   <option value="30_24" data-i18n="option.30_24">30 FPS → 24 FPS (NTSC → sinema)</option>
                   <option value="30000_25000" data-i18n="option.30000_25000">30 FPS → 25 FPS (NTSC → PAL TV)</option>
                 </select>
+            </div>
             `;
 
             const formatSelect = document.getElementById('formatSelect');
@@ -1257,16 +1262,46 @@ export class MediaConverterApp {
                         </div>
                     `;
                 }
-            } else {
-                phaseDetails = `
-                    <div class="phase-details" style="margin-top: 8px;">
-                        <div class="phase-details__title" style="margin-bottom: 6px;">${currentPhaseText}</div>
+            } else if (job.metadata?.isPlaylist) {
+            const dlDone = Number(job?.counters?.dlDone || 0);
+            const cvDone = Number(job?.counters?.cvDone || 0);
+            const total  = Number(
+                (job?.playlist && job.playlist.total) ||
+                (job?.counters && job.counters.dlTotal) || 0
+            );
+            const totalTxt = total > 0 ? total : '?';
+            const curIdx = (job.playlist && Number.isFinite(job.playlist.current))
+                ? (job.playlist.current + 1)
+                : (dlDone + 1);
+            phaseDetails = `
+                <div class="phase-details">
+                    <div class="phase-details__title">${currentPhaseText}</div>
+                    <div class="phase-details__grid">
+                        <span class="phase-details__item">
+                            🎵 ${this.t('ui.current')}:
+                            <span class="phase-details__value">${curIdx}</span>
+                        </span>
+                        <span class="phase-details__item">
+                            📥 ${this.t('ui.downloading')}:
+                            <span class="phase-details__value">${dlDone}/${totalTxt}</span>
+                        </span>
+                        <span class="phase-details__item">
+                            ⚡ ${this.t('ui.converting')}:
+                            <span class="phase-details__value">${cvDone}/${totalTxt}</span>
+                        </span>
+                    </div>
+                </div>
+            `;
+        } else {
+            phaseDetails = `
+                <div class="phase-details" style="margin-top: 8px;">
+                    <div class="phase-details__title" style="margin-bottom: 6px;">${currentPhaseText}</div>
                         <div class="phase-details__grid">
                             <span class="phase-details__item">
                                 📥 ${this.t('ui.downloading')}:
                                 <span class="phase-details__value">${Math.floor(job.downloadProgress || 0)}%</span>
                             </span>
-                            <span class="phase-details__item">
+                                <span class="phase-details__item">
                                 ⚡ ${this.t('ui.converting')}:
                                 <span class="phase-details__value">${Math.floor(job.convertProgress || 0)}%</span>
                             </span>

@@ -5,6 +5,7 @@ import fs from 'fs'
 import crypto from 'crypto'
 import { fileURLToPath } from 'url'
 import dotenv from 'dotenv'
+import { exec } from 'child_process'
 import formatsRoute from './routes/formats.js'
 import spotifyRoute from './routes/spotify.js'
 import playlistRoute from './routes/playlist.js'
@@ -50,6 +51,37 @@ if (process.env.YTDLP_COOKIES && process.env.YTDLP_COOKIES.startsWith('./')) {
   } catch {}
 }
 
+function checkDependencies() {
+  return new Promise((resolve) => {
+    const results = {
+      ytDlp: false,
+      ffmpeg: false
+    }
+
+    exec('yt-dlp --version', (error, stdout, stderr) => {
+      if (!error && stdout.trim()) {
+        results.ytDlp = true
+        console.log(`✅ yt-dlp is working (version: ${stdout.trim()})`)
+      } else {
+        console.log('❌ yt-dlp is not available')
+      }
+
+      exec('ffmpeg -version', (error, stdout, stderr) => {
+        if (!error && stdout.includes('ffmpeg version')) {
+          results.ffmpeg = true
+          const versionMatch = stdout.match(/ffmpeg version (\S+)/)
+          const version = versionMatch ? versionMatch[1] : 'unknown'
+          console.log(`✅ ffmpeg is working (version: ${version})`)
+        } else {
+          console.log('❌ ffmpeg is not available')
+        }
+
+        resolve(results)
+      })
+    })
+  })
+}
+
 app.use(express.json({ limit: '10mb' }))
 app.use(express.static(path.join(__dirname, 'public')))
 
@@ -86,11 +118,20 @@ app.use((err, req, res, next) => {
 })
 
 const PORT = process.env.PORT || 5174
-app.listen(PORT, () => {
-  console.log(`🚀 Server http://localhost:${PORT} running`)
-  console.log(`📁 Base: ${BASE_DIR}`)
-  console.log(`📁 Uploads: ${UPLOAD_DIR}`)
-  console.log(`📁 Outputs: ${OUTPUT_DIR}`)
-  console.log(`📁 Temp: ${TEMP_DIR}`)
-  console.log('⚠️  yt-dlp required for YouTube support')
+
+checkDependencies().then((results) => {
+  app.listen(PORT, () => {
+    console.log(`🚀 Server http://localhost:${PORT} running`)
+    console.log(`📁 Base: ${BASE_DIR}`)
+    console.log(`📁 Uploads: ${UPLOAD_DIR}`)
+    console.log(`📁 Outputs: ${OUTPUT_DIR}`)
+    console.log(`📁 Temp: ${TEMP_DIR}`)
+    console.log('⚠️  Dependency Status:')
+    console.log(`   ${results.ytDlp ? '✅' : '❌'} yt-dlp - ${results.ytDlp ? 'Available' : 'Required for YouTube support'}`)
+    console.log(`   ${results.ffmpeg ? '✅' : '❌'} ffmpeg - ${results.ffmpeg ? 'Available' : 'Required for audio/video processing'}`)
+
+    if (!results.ytDlp || !results.ffmpeg) {
+      console.log('💡 Please install missing dependencies for full functionality')
+    }
+  })
 })

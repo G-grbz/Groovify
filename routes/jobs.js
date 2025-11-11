@@ -443,25 +443,25 @@ router.get("/api/jobs", requireAuth, (req, res) => {
       errorsCount: j.errorsCount || 0,
       lastLog: j.lastLog || null,
       metadata: {
-        source: j.metadata?.source,
-        isPlaylist: !!j.metadata?.isPlaylist,
-        isAutomix: !!j.metadata?.isAutomix,
-        frozenTitle: j.metadata?.frozenTitle || null,
-        extracted: j.metadata?.extracted || null,
-        skipStats: j.metadata?.skipStats || { skippedCount: 0, errorsCount: 0 },
-        spotifyTitle: j.metadata?.spotifyTitle || null,
-        originalName: j.metadata?.originalName || null,
-        includeLyrics: !!j.metadata?.includeLyrics,
-        lyricsStats: j.metadata?.lyricsStats || null,
-        frozenEntries: Array.isArray(j.metadata?.frozenEntries)
-          ? j.metadata.frozenEntries.map(e => ({
-              index: e.index,
-              title: e.title,
-              hasLyrics: !!e.hasLyrics
-            })).slice(0, 500)
-          : null,
-        lyricsStats: j.metadata?.lyricsStats || { found: 0, notFound: 0 },
-      },
+      source: j.metadata?.source,
+      isPlaylist: !!j.metadata?.isPlaylist,
+      isAutomix: !!j.metadata?.isAutomix,
+      frozenTitle: j.metadata?.frozenTitle || null,
+      extracted: j.metadata?.extracted || null,
+      skipStats: j.metadata?.skipStats || { skippedCount: 0, errorsCount: 0 },
+      spotifyTitle: j.metadata?.spotifyTitle || null,
+      originalName: j.metadata?.originalName || null,
+      includeLyrics: !!j.metadata?.includeLyrics,
+      lyricsStats: j.metadata?.lyricsStats || null,
+      frozenEntries: Array.isArray(j.metadata?.frozenEntries)
+        ? j.metadata.frozenEntries.map(e => ({
+            index: e.index,
+            title: e.title,
+            hasLyrics: !!e.hasLyrics
+          })).slice(0, 500)
+        : null,
+      counters: j.counters || { dlTotal: 0, dlDone: 0, cvTotal: 0, cvDone: 0 }
+        },
     });
     let items = all.map(pick);
     if (status === "active")      items = items.filter(j => j.status!=="completed" && j.status!=="error");
@@ -499,24 +499,24 @@ router.get("/api/stream", requireAuth, (req, res) => {
       playlist: j.playlist || null,
       lastLog: j.lastLog || null,
       metadata: {
-        source: j.metadata?.source,
-        isPlaylist: !!j.metadata?.isPlaylist,
-        isAutomix: !!j.metadata?.isAutomix,
-        frozenTitle: j.metadata?.frozenTitle || null,
-        extracted: j.metadata?.extracted || null,
-        skipStats: j.metadata?.skipStats || { skippedCount: 0, errorsCount: 0 },
-        spotifyTitle: j.metadata?.spotifyTitle || null,
-        originalName: j.metadata?.originalName || null,
-        includeLyrics: !!j.metadata?.includeLyrics,
-        lyricsStats: j.metadata?.lyricsStats || null,
-        frozenEntries: Array.isArray(j.metadata?.frozenEntries)
-          ? j.metadata.frozenEntries.map(e => ({
-              index: e.index,
-              title: e.title,
-              hasLyrics: !!e.hasLyrics
-            })).slice(0, 500)
-          : null,
-        lyricsStats: j.metadata?.lyricsStats || { found: 0, notFound: 0 },
+      source: j.metadata?.source,
+      isPlaylist: !!j.metadata?.isPlaylist,
+      isAutomix: !!j.metadata?.isAutomix,
+      frozenTitle: j.metadata?.frozenTitle || null,
+      extracted: j.metadata?.extracted || null,
+      skipStats: j.metadata?.skipStats || { skippedCount: 0, errorsCount: 0 },
+      spotifyTitle: j.metadata?.spotifyTitle || null,
+      originalName: j.metadata?.originalName || null,
+      includeLyrics: !!j.metadata?.includeLyrics,
+      lyricsStats: j.metadata?.lyricsStats || null,
+      frozenEntries: Array.isArray(j.metadata?.frozenEntries)
+        ? j.metadata.frozenEntries.map(e => ({
+            index: e.index,
+            title: e.title,
+            hasLyrics: !!e.hasLyrics
+          })).slice(0, 500)
+        : null,
+      counters: j.counters || { dlTotal: 0, dlDone: 0, cvTotal: 0, cvDone: 0 }
       },
     }));
     return `data: ${JSON.stringify({ items })}\n\n`;
