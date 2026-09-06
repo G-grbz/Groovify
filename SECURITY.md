@@ -31,11 +31,16 @@ When administrator-gated application access is enabled, Gharmonize enforces the 
 
 ## Release verification
 
-Official tagged releases publish `SHA256SUMS`, a CycloneDX SBOM, and GitHub artifact attestations. Verify a downloaded artifact with:
+Official tagged releases publish a CycloneDX SBOM, a GPG-signed `SHA256SUMS` manifest, the public release-signing key, and GitHub artifact attestations. The public GPG key is itself covered by GitHub provenance, so authenticate the key before importing it:
 
 ```bash
-gh attestation verify <artifact> --repo G-grbz/Gharmonize
+gh attestation verify Gharmonize-release-signing-key.asc --repo G-grbz/Gharmonize
+gpg --import Gharmonize-release-signing-key.asc
+gpg --verify SHA256SUMS.asc SHA256SUMS
 sha256sum -c SHA256SUMS
+
+# Optional direct provenance verification for an individual artifact:
+gh attestation verify <artifact> --repo G-grbz/Gharmonize
 ```
 
 ## Official downloads, impersonation, and suspicious distributions

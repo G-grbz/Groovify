@@ -69,6 +69,12 @@ window.focusFileInputAndClose = function() {
 };
 
 document.addEventListener('DOMContentLoaded', async () => {
+    // This overlay is exclusively for runtime binary preparation. Start its
+    // check immediately and remove it as soon as the tools are usable instead
+    // of keeping it over unrelated application startup work.
+    const runtimeBinariesReady = waitForRuntimeBinariesReady();
+    runtimeBinariesReady.then(hideRuntimeBinariesOverlay);
+
     try {
         await window.i18nInit();
     } catch (error) {
@@ -86,7 +92,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (loadingScreen) loadingScreen.style.display = 'none';
     if (mainContent) mainContent.style.display = 'block';
 
-    await waitForRuntimeBinariesReady();
+    await runtimeBinariesReady;
 
     document.getElementById('jobsEmptyUrlAction')?.addEventListener('click', () => window.focusUrlInput());
     document.getElementById('jobsEmptyFileAction')?.addEventListener('click', () => window.focusFileInput());
@@ -145,7 +151,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     setupCollapsibleSections();
     setupTitlePositioning();
     initDiscRipperPanel();
-    hideRuntimeBinariesOverlay();
     });
 
 window.versionManager = versionManager;

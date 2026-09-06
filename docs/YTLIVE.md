@@ -48,3 +48,48 @@ Personal YouTube Music shelves require a usable cookie source — either `cookie
 - Docker can use `cookies.txt`, but **cannot** extract cookies from a host browser profile inside the container.
 
 For full details on cookie behavior across environments, see [COOKIES.md](COOKIES.md).
+
+## Shared Server Cache and Request Limits
+
+All browsers connected to the **same Gharmonize server** share its YouTube Music
+cache and in-flight loads. Changing the visible shelf count or discovery page size
+reuses already-fetched content; missing personal shelves resume from a private
+continuation checkpoint. Changing a layout setting does not force a fresh feed.
+
+The server stores a bounded snapshot at `DATA_DIR/cache/youtube-music-cache.json`
+(or `cache/youtube-music-cache.json` under the working directory when `DATA_DIR`
+is unset). The snapshot is written atomically with owner-only file permissions on
+Unix. It contains recommendations and continuation checkpoints, **not raw cookies
+or authorization headers**. Session hashes, account indexes and locales separate
+personal feeds. Treat the cache as private application data.
+
+- Personal Home stays fresh for 10 minutes by default. Expired data can remain
+  visible during refresh or upstream failures for up to 24 hours.
+- Discovery results and query pools stay fresh for 15 minutes by default.
+- Partial loads remain resumable; temporary failures use a short shared retry
+  delay, rather than marking an incomplete feed complete.
+- Explicit Home refreshes share in-flight work and have a 30-second server-side
+  cooldown. Ordinary browser reloads reuse fresh data.
+- The Home, discovery and music-search JSON API flows share two request slots
+  and a 500 ms minimum start interval. HTTP 429 is not immediately retried:
+  `Retry-After` is respected, or a five-minute cooldown is used when absent.
+  The cooldown is shared across browsers and persisted across restarts.
+
+Optional environment settings:
+
+| Setting | Default | Purpose |
+| --- | --- | --- |
+| `YTM_SHARED_CACHE_PERSIST` | `1` | Set to `0` for memory-only caching. |
+| `YTM_HOME_RESULT_CACHE_TTL_MS` | `600000` | Personal Home freshness. |
+| `YOUTUBE_DISCOVER_CACHE_TTL_MS` | `900000` | Discovery freshness. |
+| `YTM_API_MIN_INTERVAL_MS` | `500` | Minimum gap between API load starts. |
+| `YTM_PARTIAL_RETRY_DELAY_MS` | `5000` | Shared retry delay after partial Home errors. |
+
+If the data volume is read-only, memory caching still works, but does not survive
+restart. Separate desktop processes/containers do not share a live request queue;
+use one server for multiple browsers. Do not point independent server processes
+at the same snapshot file as a substitute for a distributed cache.
+
+These controls reduce unnecessary API traffic; they cannot guarantee that YouTube
+will never rate-limit an IP address or account. They do not control yt-dlp download
+jobs, embedded browser playback, GiG, or other applications using the same public IP.

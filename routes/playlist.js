@@ -120,7 +120,8 @@ router.get("/api/youtube/music-home", async (req, res) => {
     const shelves = Number(req.query.shelves || 6);
     const lang = String(req.query.lang || "").trim().toLowerCase();
     const region = String(req.query.region || "").trim().toUpperCase();
-    const result = await getYouTubeMusicHomeShelves({ limit, shelves, lang, region });
+    const forceRefresh = String(req.query.refresh || "").trim() === "1";
+    const result = await getYouTubeMusicHomeShelves({ limit, shelves, lang, region, forceRefresh });
     return sendOk(res, result);
   } catch (e) {
     console.warn("YouTube Music home unavailable:", e?.message || e);
@@ -138,6 +139,7 @@ router.get("/api/youtube/music-home-stream", async (req, res) => {
   const shelves = Number(req.query.shelves || 6);
   const lang = String(req.query.lang || "").trim().toLowerCase();
   const region = String(req.query.region || "").trim().toUpperCase();
+  const forceRefresh = String(req.query.refresh || "").trim() === "1";
 
   res.status(200);
   res.setHeader("Content-Type", "application/x-ndjson; charset=utf-8");
@@ -146,9 +148,10 @@ router.get("/api/youtube/music-home-stream", async (req, res) => {
   res.flushHeaders?.();
 
   const writeFrame = (payload) => {
-    if (res.writableEnded || res.destroyed) return;
+    if (res.writableEnded || res.destroyed) return false;
     res.write(`${JSON.stringify(payload)}\n`);
     res.flush?.();
+    return true;
   };
 
   try {
@@ -157,6 +160,7 @@ router.get("/api/youtube/music-home-stream", async (req, res) => {
       shelves,
       lang,
       region,
+      forceRefresh,
       onProgress: (progress) => writeFrame({ type: "progress", ...progress })
     });
     writeFrame({ type: "done", ...result });

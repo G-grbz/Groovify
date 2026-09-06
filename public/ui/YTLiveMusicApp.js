@@ -100,6 +100,8 @@ class YTLiveMusicApp {
     this.currentPlaybackItem = null;
     this.musicHomeShelves = [];
     this.musicHomeController = null;
+    this.musicHomeRetryTimer = null;
+    this.discoverResultCache = new Map();
     this.youtubePlayer = null;
     this.youtubeApiPromise = null;
     this.youtubePlaybackToken = 0;
@@ -140,6 +142,11 @@ class YTLiveMusicApp {
   }
 
   async initialize() {
+    // The startup overlay only represents runtime binary preparation. Do not
+    // leave it visible while the rest of YTLive loads after the tools are ready.
+    const runtimeBinariesReady = waitForRuntimeBinariesReady();
+    runtimeBinariesReady.then(hideRuntimeBinariesOverlay);
+
     try {
       await window.i18nInit?.();
     } catch (error) {
@@ -147,7 +154,7 @@ class YTLiveMusicApp {
     }
 
     await accessManager.ensureAccess();
-    await waitForRuntimeBinariesReady();
+    await runtimeBinariesReady;
 
     window.app = {
       showNotification: (message, type = 'info') => this.notify(message, type),
@@ -162,15 +169,16 @@ class YTLiveMusicApp {
     accessInboxManager.initialize();
     this.bindEvents();
     this.applyLocalizedUi();
-    await this.refreshDownloadLists();
-    await this.loadUiConfig();
-    await this.loadFormats();
-    this.renderFormatOptions();
-    await this.refreshQueueStatus();
-    this.scheduleQueuePoll();
+    // Recommendations do not depend on download lists, output formats or the
+    // queue snapshot. Start them as soon as access and runtime tools are ready.
     this.loadMusicHomeShelves();
-    await this.search('', { preset: 'energizing' });
-    hideRuntimeBinariesOverlay();
+    await Promise.all([
+      this.search('', { preset: 'energizing' }),
+      this.refreshDownloadLists(),
+      this.loadUiConfig(),
+      this.loadFormats().then(() => this.renderFormatOptions()),
+      this.refreshQueueStatus().then(() => this.scheduleQueuePoll())
+    ]);
   }
 
   bindEvents() {
@@ -202,7 +210,7 @@ class YTLiveMusicApp {
       if (this.currentItem) this.openDownloadListMenu(event, this.currentItem);
     });
     document.getElementById('refreshQueueBtn')?.addEventListener('click', () => this.refreshQueueStatus(true));
-    document.getElementById('refreshMusicHomeBtn')?.addEventListener('click', () => this.loadMusicHomeShelves({ showToast: true }));
+    document.getElementById('refreshMusicHomeBtn')?.addEventListener('click', () => this.loadMusicHomeShelves({ showToast: true, forceRefresh: true }));
     this.syncMusicHomeShelfCountInput();
     document.getElementById('musicHomeShelfCountInput')?.addEventListener('change', () => this.handleMusicHomeShelfCountChange());
     document.getElementById('formatSelect')?.addEventListener('change', () => this.handleFormatChange());
@@ -780,7 +788,7 @@ class YTLiveMusicApp {
         this.clearPlayer(this.tt('ytlive.results.noPlaylists', 'Çalma listesi bulunamadı.'));
       }
     } catch (error) {
-      if (error.name === 'AbortError') return;
+      if (error.name === 'AbortError' || searchId !== this.searchSerial) return;
       this.results = [];
       this.hasMoreResults = false;
       this.renderResults();
@@ -833,6 +841,11 @@ class YTLiveMusicApp {
       region: this.getCurrentRegion()
     });
 
+    const cacheKey = params.toString();
+    const cached = this.discoverResultCache.get(cacheKey);
+    if (cached?.expiresAt > Date.now()) return cached.result;
+    this.discoverResultCache.delete(cacheKey);
+
     const response = await fetch(`/api/youtube/discover?${params}`, {
       signal,
       cache: 'no-store'
@@ -845,11 +858,21 @@ class YTLiveMusicApp {
     const items = (Array.isArray(data.items) ? data.items : [])
       .map((item) => this.normalizeItem(item))
       .filter((item) => preset !== 'playlist' || this.isPlaylistLike(item));
+    if (!items.length && Number(data.retryAfterMs) > 0) {
+      throw new Error(data.warning || 'YouTube geçici istek sınırı uyguladı; lütfen bir süre sonra tekrar dene.');
+    }
 
-    return {
+    const result = {
       items,
       hasMore: !!data.hasMore
     };
+    if (items.length >= limit) {
+      if (this.discoverResultCache.size >= 40) {
+        this.discoverResultCache.delete(this.discoverResultCache.keys().next().value);
+      }
+      this.discoverResultCache.set(cacheKey, { result, expiresAt: Date.now() + 120000 });
+    }
+    return result;
   }
 
   async readMusicHomeShelfStream(params, { signal = null, onProgress = null } = {}) {
@@ -895,20 +918,25 @@ class YTLiveMusicApp {
       }
     };
 
-    while (true) {
-      const { value, done } = await reader.read();
-      buffer += decoder.decode(value || new Uint8Array(), { stream: !done });
-      let newlineIndex = buffer.indexOf('\n');
-      while (newlineIndex >= 0) {
-        const line = buffer.slice(0, newlineIndex);
-        buffer = buffer.slice(newlineIndex + 1);
-        processLine(line);
-        newlineIndex = buffer.indexOf('\n');
+    try {
+      while (true) {
+        const { value, done } = await reader.read();
+        buffer += decoder.decode(value || new Uint8Array(), { stream: !done });
+        let newlineIndex = buffer.indexOf('\n');
+        while (newlineIndex >= 0) {
+          const line = buffer.slice(0, newlineIndex);
+          buffer = buffer.slice(newlineIndex + 1);
+          processLine(line);
+          newlineIndex = buffer.indexOf('\n');
+        }
+        if (done) break;
       }
-      if (done) break;
+      if (buffer.trim()) processLine(buffer);
+      if (!finalData) throw new Error(this.tt('ytlive.musicHome.failed', 'YouTube Music ana sayfası okunamadı.'));
+      return finalData;
+    } finally {
+      reader.releaseLock();
     }
-    if (buffer.trim()) processLine(buffer);
-    return finalData || {};
   }
 
   normalizeMusicHomeShelfPayload(data = {}) {
@@ -923,15 +951,27 @@ class YTLiveMusicApp {
       .filter((shelf) => shelf.items.length);
   }
 
-  async loadMusicHomeShelves({ showToast = false } = {}) {
+  async loadMusicHomeShelves({ showToast = false, forceRefresh = false, retryAttempt = 0 } = {}) {
     const section = document.getElementById('musicHomeSection');
     const status = document.getElementById('musicHomeStatus');
     if (!section) return;
 
+    window.clearTimeout(this.musicHomeRetryTimer);
+    this.musicHomeRetryTimer = null;
     if (this.musicHomeController) {
       this.musicHomeController.abort();
     }
-    this.musicHomeController = new AbortController();
+    const controller = new AbortController();
+    this.musicHomeController = controller;
+    const isCurrent = () => this.musicHomeController === controller && !controller.signal.aborted;
+    const retry = (retryAfterMs = 0) => {
+      if (!isCurrent() || retryAttempt >= 3) return false;
+      this.musicHomeRetryTimer = window.setTimeout(() => {
+        if (isCurrent()) return this.loadMusicHomeShelves({ forceRefresh: false, retryAttempt: retryAttempt + 1 });
+      }, Math.max([1000, 3000, 6000][retryAttempt], Math.min(3600000, Number(retryAfterMs) || 0)));
+      return true;
+    };
+    if (status) status.title = '';
 
     if (this.musicHomeShelves.length && status) {
       status.textContent = this.tt('ytlive.musicHome.refreshing', 'YouTube Music rafları yenileniyor...');
@@ -942,13 +982,15 @@ class YTLiveMusicApp {
         shelves: String(this.musicHomeShelfCount),
         limit: '12',
         lang: this.getCurrentLang(),
-        region: this.getCurrentRegion()
+        region: this.getCurrentRegion(),
+        refresh: forceRefresh ? '1' : '0'
       });
-      let lastProgressShelfCount = 0;
+      let lastProgressShelfCount = retryAttempt ? this.musicHomeShelves.length : 0;
       let receivedPersonalProgress = false;
       const data = await this.readMusicHomeShelfStream(params, {
-        signal: this.musicHomeController.signal,
+        signal: controller.signal,
         onProgress: (progress) => {
+          if (!isCurrent()) return;
           const progressiveShelves = this.normalizeMusicHomeShelfPayload(progress);
           if (!progressiveShelves.length || progressiveShelves.length < lastProgressShelfCount) return;
           lastProgressShelfCount = progressiveShelves.length;
@@ -972,6 +1014,7 @@ class YTLiveMusicApp {
           }
         }
       });
+      if (!isCurrent()) return;
       if (data?.error?.message) {
         throw new Error(data.error.message);
       }
@@ -991,6 +1034,7 @@ class YTLiveMusicApp {
       if (this.musicHomeShelves.length) {
         const source = finalSource;
         const usingPersonalShelves = isDirectPersonalHome || preservingPersonalProgress;
+        const retryScheduled = usingPersonalShelves && data.partial && data.hasMore !== false && retry(data.retryAfterMs);
         const authUser = data.authUser == null || data.authUser === '' ? '' : String(data.authUser);
         const continuationPages = Number(data.continuationPages || 0);
         const elapsedMs = Number(data.elapsedMs || 0);
@@ -1005,7 +1049,8 @@ class YTLiveMusicApp {
               authUser ? `YT hesap ${authUser}` : '',
               continuationPages > 0 ? `${continuationPages} devam sayfası` : '',
               elapsedLabel,
-              (data.partial || preservingPersonalProgress) ? 'devamı tamamlanamadı' : ''
+              retryScheduled ? (data.retryAfterMs > 10000 ? 'YouTube için bekleme süresi' : 'devamı yeniden deneniyor') : (data.partial || preservingPersonalProgress) ? 'devamı tamamlanamadı' : '',
+              data.cached ? 'sunucu önbelleğinden' : ''
             ].filter(Boolean);
             status.textContent = diagnostics.length ? `${base} · ${diagnostics.join(' · ')}` : base;
           } else if (source === 'yt-dlp') {
@@ -1025,16 +1070,16 @@ class YTLiveMusicApp {
           });
         }
 
-        this.playRandomPlayerContent({ source: 'musicHome' });
+        if (!retryAttempt) this.playRandomPlayerContent({ source: 'musicHome' });
         if (showToast) {
           if (usingPersonalShelves && !data.partial && !preservingPersonalProgress) {
             this.notify(this.tt('ytlive.musicHome.updated', 'YouTube Music rafları yenilendi.'), 'success');
-          } else if (usingPersonalShelves) {
+          } else if (usingPersonalShelves && !retryScheduled) {
             this.notify(
-              String(data.warning || 'Kişisel raflar yüklendi; devam sayfalarının tamamı alınamadı.'),
+              'Kişisel raflar korundu; YouTube Music bağlantısı yavaş olduğu için devamı henüz tamamlanamadı.',
               'warning'
             );
-          } else {
+          } else if (!usingPersonalShelves) {
             this.notify(
               String(data.warning || 'YouTube Music kişisel Home kullanılamadı; fallback rafları gösteriliyor.'),
               'warning'
@@ -1045,6 +1090,7 @@ class YTLiveMusicApp {
       }
 
       section.hidden = true;
+      if (Number(data.retryAfterMs) > 0) retry(data.retryAfterMs);
       if (showToast) {
         const message = data.warning
           ? String(data.warning)
@@ -1054,9 +1100,15 @@ class YTLiveMusicApp {
         this.notify(message, 'info');
       }
     } catch (error) {
-      if (error.name === 'AbortError') return;
+      if (error.name === 'AbortError' || !isCurrent()) return;
+      const retryScheduled = retry();
+      if (status) {
+        status.textContent = retryScheduled
+          ? 'YouTube Music bağlantısı yeniden deneniyor; yüklenen raflar korundu.'
+          : 'YouTube Music yüklemesi tamamlanamadı. Yenile düğmesiyle tekrar deneyebilirsin.';
+      }
       if (!this.musicHomeShelves.length) section.hidden = true;
-      if (showToast) {
+      if (showToast && !retryScheduled) {
         this.notify(error.message || this.tt('ytlive.musicHome.failed', 'YouTube Music ana sayfası okunamadı.'), 'error');
       } else {
         console.warn('YouTube Music home could not be loaded:', error);
@@ -2176,13 +2228,18 @@ class YTLiveMusicApp {
   async loadMorePresetResults() {
     if (!this.hasMoreResults || this.isLoadingMore || !this.presetPaging) return;
 
+    const searchId = this.searchSerial;
+    const paging = this.presetPaging;
+    const signal = this.searchController?.signal;
+    const isCurrent = () => searchId === this.searchSerial && paging === this.presetPaging && !signal?.aborted;
     this.isLoadingMore = true;
     this.updateLoadMoreState('loading');
 
     try {
       if (this.presetPaging.mode === 'discover') {
         const nextPage = Number(this.presetPaging.page || 1) + 1;
-        const result = await this.fetchDiscoverItems({ preset: this.activePreset, page: nextPage });
+        const result = await this.fetchDiscoverItems({ preset: this.activePreset, page: nextPage, signal });
+        if (!isCurrent()) return;
         const added = this.mergeUniqueResults(result.items);
 
         if (added.length) {
@@ -2217,8 +2274,10 @@ class YTLiveMusicApp {
         lastQuery = query;
         const items = await this.fetchSearchItems(query, {
           preset: this.activePreset,
-          type: this.activeSearchType
+          type: this.activeSearchType,
+          signal
         });
+        if (!isCurrent()) return;
         added = this.mergeUniqueResults(items);
       }
 
@@ -2239,13 +2298,16 @@ class YTLiveMusicApp {
         }
       }
     } catch (error) {
+      if (error.name === 'AbortError' || !isCurrent()) return;
       this.presetPaging.failedLoads += 1;
       this.notify(error.message || this.tt('ytlive.search.failed', 'Arama başarısız.'), 'error');
       if (this.presetPaging.failedLoads >= 2) this.hasMoreResults = false;
     } finally {
-      this.isLoadingMore = false;
-      this.updateLoadMoreState(this.hasMoreResults ? '' : 'done');
-      window.setTimeout(() => this.maybeLoadMoreByScroll(), 80);
+      if (isCurrent()) {
+        this.isLoadingMore = false;
+        this.updateLoadMoreState(this.hasMoreResults ? '' : 'done');
+        window.setTimeout(() => this.maybeLoadMoreByScroll(), 80);
+      }
     }
   }
 

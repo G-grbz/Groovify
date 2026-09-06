@@ -298,18 +298,102 @@ export class VersionManager {
 
     // Formats release notes for the browser UI layer.
     formatReleaseNotes(notes) {
-        const text = notes || '';
-        if (window.marked && typeof window.marked.parse === 'function') {
-            return window.marked.parse(text);
+        const text = String(notes || '').replace(/\r\n?/g, '\n');
+
+        const formatInline = (value) => {
+            const placeholders = [];
+            const stash = (html) => {
+                const index = placeholders.push(html) - 1;
+                return `\uE000${index}\uE001`;
+            };
+            const withProtectedTokens = String(value)
+                .replace(/`([^`\n]+)`/g, (_match, code) => stash(`<code>${this.escapeHtml(code)}</code>`))
+                .replace(/\[([^\]]+)]\((https?:\/\/[^\s)]+)\)/g,
+                (_match, label, href) => {
+                    try {
+                        const url = new URL(href);
+                        if (url.protocol !== 'https:' && url.protocol !== 'http:') return this.escapeHtml(label);
+                        return stash(`<a href="${this.escapeHtml(url.toString())}" target="_blank" rel="noopener noreferrer">${this.escapeHtml(label)}</a>`);
+                    } catch {
+                        return this.escapeHtml(label);
+                    }
+                }
+            );
+
+            return this.escapeHtml(withProtectedTokens)
+                .replace(/(\*\*|__)(?=\S)([\s\S]*?\S)\1/g, '<strong>$2</strong>')
+                .replace(/(^|[^*])\*(?=\S)([^*\n]*?\S)\*(?!\*)/g, '$1<em>$2</em>')
+                .replace(/(^|[^_])_(?=\S)([^_\n]*?\S)_(?!_)/g, '$1<em>$2</em>')
+                .replace(/\uE000(\d+)\uE001/g, (_match, index) => placeholders[Number(index)] || '');
+        };
+
+        const lines = text.split('\n');
+        const blocks = [];
+        let paragraph = [];
+        let list = null;
+
+        const flushParagraph = () => {
+            if (!paragraph.length) return;
+            blocks.push(`<p>${paragraph.map(formatInline).join('<br>')}</p>`);
+            paragraph = [];
+        };
+        const flushList = () => {
+            if (!list?.items.length) return;
+            blocks.push(`<${list.type}>${list.items.map((item) => `<li>${formatInline(item)}</li>`).join('')}</${list.type}>`);
+            list = null;
+        };
+
+        for (let index = 0; index < lines.length; index += 1) {
+            const line = lines[index];
+            const fence = line.match(/^```\s*([\w-]+)?\s*$/);
+            if (fence) {
+                flushParagraph();
+                flushList();
+                const codeLines = [];
+                index += 1;
+                while (index < lines.length && !/^```\s*$/.test(lines[index])) {
+                    codeLines.push(lines[index]);
+                    index += 1;
+                }
+                const language = String(fence[1] || '').replace(/[^a-z0-9_-]/gi, '');
+                const className = language ? ` class="language-${language}"` : '';
+                blocks.push(`<pre><code${className}>${this.escapeHtml(codeLines.join('\n'))}</code></pre>`);
+                continue;
+            }
+
+            const heading = line.match(/^(#{1,6})\s+(.+?)\s*#*\s*$/);
+            if (heading) {
+                flushParagraph();
+                flushList();
+                const level = Math.min(6, heading[1].length + 1);
+                blocks.push(`<h${level}>${formatInline(heading[2])}</h${level}>`);
+                continue;
+            }
+
+            const unordered = line.match(/^\s*[-*+]\s+(.+)$/);
+            const ordered = line.match(/^\s*\d+[.)]\s+(.+)$/);
+            if (unordered || ordered) {
+                flushParagraph();
+                const type = ordered ? 'ol' : 'ul';
+                if (list && list.type !== type) flushList();
+                if (!list) list = { type, items: [] };
+                list.items.push((unordered || ordered)[1]);
+                continue;
+            }
+
+            if (!line.trim()) {
+                flushParagraph();
+                flushList();
+                continue;
+            }
+
+            flushList();
+            paragraph.push(line);
         }
-        return this.escapeHtml(text)
-            .replace(/^### (.*)$/gm, '<h4>$1</h4>')
-            .replace(/^## (.*)$/gm, '<h3>$1</h3>')
-            .replace(/^# (.*)$/gm, '<h2>$1</h2>')
-            .replace(/^- (.*)$/gm, '<li>$1</li>')
-            .replace(/(<li>.*<\/li>)/gs, '<ul>$1</ul>')
-            .replace(/\n\n+/g, '<br><br>')
-            .replace(/\n/g, '<br>');
+
+        flushParagraph();
+        flushList();
+        return blocks.join('');
     }
 
     // Handles dismiss update in the browser UI layer.

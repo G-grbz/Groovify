@@ -122,13 +122,52 @@ jobs:
           set -euo pipefail
           git archive --format=zip --prefix="Gharmonize-v${VERSION}/" -o "release/Gharmonize-v${VERSION}-source.zip" "$GITHUB_SHA"
           npm sbom --sbom-format cyclonedx > "release/Gharmonize-v${VERSION}.sbom.cdx.json"
-          cd release
-          sha256sum Gharmonize-* > SHA256SUMS
-          sha256sum -c SHA256SUMS
+      - name: Create and sign release manifest
+        shell: bash
+        env:
+          GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
+          GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
+        run: |
+          set -euo pipefail
+
+          if [[ -z "${GPG_PRIVATE_KEY:-}" || -z "${GPG_PASSPHRASE:-}" ]]; then
+            echo "::error::GPG_PRIVATE_KEY and GPG_PASSPHRASE repository secrets are required for release signing."
+            exit 1
+          fi
+
+          export GNUPGHOME="$RUNNER_TEMP/gharmonize-gnupg"
+          mkdir -p "$GNUPGHOME"
+          chmod 700 "$GNUPGHOME"
+          trap 'gpgconf --kill all >/dev/null 2>&1 || true; rm -rf "$GNUPGHOME"' EXIT
+
+          printf '%s\n' "$GPG_PRIVATE_KEY" | gpg --batch --import
+          FINGERPRINT="$(gpg --batch --with-colons --list-secret-keys | awk -F: '$1 == "fpr" { print $10; exit }')"
+          test -n "$FINGERPRINT"
+
+          gpg --batch --armor --export "$FINGERPRINT" > release/Gharmonize-release-signing-key.asc
+
+          (
+            cd release
+            sha256sum Gharmonize-* > SHA256SUMS
+            sha256sum -c SHA256SUMS
+          )
+
+          gpg --batch --yes --pinentry-mode loopback \
+            --passphrase "$GPG_PASSPHRASE" \
+            --local-user "$FINGERPRINT" \
+            --armor --detach-sign \
+            --output release/SHA256SUMS.asc \
+            release/SHA256SUMS
+
+          gpg --batch --verify release/SHA256SUMS.asc release/SHA256SUMS
+          echo "Release signing key fingerprint: $FINGERPRINT"
       - name: Attest release artifacts
         uses: actions/attest@v4
         with:
-          subject-path: 'release/Gharmonize-*'
+          subject-path: |
+            release/Gharmonize-*
+            release/SHA256SUMS
+            release/SHA256SUMS.asc
       - name: Attach SBOM attestation to source archive
         uses: actions/attest@v4
         with:
