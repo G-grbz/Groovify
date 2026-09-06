@@ -26,6 +26,6 @@ test('release note fallback renders common Markdown without exposing HTML', () =
   assert.match(html, /<ul><li>first item<\/li><li>second item<\/li><\/ul>/);
   assert.match(html, /<pre><code class="language-bash">docker pull ghcr\.io&#47;g-grbz&#47;gharmonize:latest<\/code><\/pre>/);
   assert.match(html, /target="_blank" rel="noopener noreferrer"/);
-  assert.doesNotMatch(html, /<script>/);
+  assert.equal(html.includes('<script>'), false);
   assert.match(html, /&lt;script&gt;alert\(1\)&lt;&#47;script&gt;/);
 });

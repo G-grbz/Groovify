@@ -8,13 +8,16 @@ export function createYtMusicSharedCache({ file, now = Date.now, flushDelayMs = 
   const maps = new Map();
   let saved = {}, timer = null, dirty = false;
   if (file) {
+    let fd = null;
     try {
-      const info = fs.lstatSync(file);
+      fd = fs.openSync(file, 'r');
+      const info = fs.fstatSync(fd);
       if (info.isFile() && info.size <= maxBytes) {
-        const snapshot = JSON.parse(fs.readFileSync(file, 'utf8'));
+        const snapshot = JSON.parse(fs.readFileSync(fd, 'utf8'));
         if (snapshot.version === 1 && snapshot.namespaces && typeof snapshot.namespaces === 'object') saved = snapshot.namespaces;
       }
     } catch { /* Missing/corrupt caches are disposable, not startup failures. */ }
+    finally { if (fd !== null) { try { fs.closeSync(fd); } catch {} } }
   }
   const flush = () => {
     clearTimeout(timer);
