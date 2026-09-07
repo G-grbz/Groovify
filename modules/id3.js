@@ -165,7 +165,10 @@ function pickSourceUrl(meta = {}) {
     meta.spotifyUrl ||
     meta.spUrl ||
     meta.deezerUrl ||
-    meta.dzUrl
+    meta.dzUrl ||
+    meta.tidalUrl ||
+    meta.soundcloudUrl ||
+    meta.scUrl
   );
 }
 
@@ -247,6 +250,11 @@ export function buildRichId3v2Tags(meta = {}) {
   pushUserDefinedText(userDefinedText, "DEEZER_TRACK_ID", meta.deezer_track_id);
   pushUserDefinedText(userDefinedText, "DEEZER_ALBUM_ID", meta.deezer_album_id);
   pushUserDefinedText(userDefinedText, "DEEZER_ARTIST_ID", meta.deezer_artist_id);
+  pushUserDefinedText(userDefinedText, "TIDAL_TRACK_ID", meta.tidal_track_id);
+  pushUserDefinedText(userDefinedText, "TIDAL_ALBUM_ID", meta.tidal_album_id);
+  pushUserDefinedText(userDefinedText, "TIDAL_ARTIST_ID", meta.tidal_artist_id);
+  pushUserDefinedText(userDefinedText, "SOUNDCLOUD_TRACK_ID", meta.soundcloud_track_id);
+  pushUserDefinedText(userDefinedText, "SOUNDCLOUD_URN", meta.soundcloud_urn);
   pushUserDefinedText(userDefinedText, "ALBUM_ID", meta.album_id);
   pushUserDefinedText(userDefinedText, "PLAYLIST_INDEX", meta.playlist_index);
   pushUserDefinedText(userDefinedText, "PLAYLIST_TOTAL", meta.playlist_total);
@@ -264,6 +272,8 @@ export function buildRichId3v2Tags(meta = {}) {
   pushUserDefinedUrl(userDefinedUrl, "DEEZER_TRACK_URL", meta.deezer_track_url);
   pushUserDefinedUrl(userDefinedUrl, "DEEZER_ALBUM_URL", meta.deezer_album_url);
   pushUserDefinedUrl(userDefinedUrl, "DEEZER_ARTIST_URL", meta.deezer_artist_url);
+  pushUserDefinedUrl(userDefinedUrl, "TIDAL_URL", meta.tidalUrl);
+  pushUserDefinedUrl(userDefinedUrl, "SOUNDCLOUD_URL", meta.soundcloudUrl || meta.scUrl);
   if (userDefinedUrl.length) tags.userDefinedUrl = userDefinedUrl;
 
   return tags;

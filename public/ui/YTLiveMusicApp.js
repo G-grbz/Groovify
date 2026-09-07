@@ -1847,6 +1847,8 @@ class YTLiveMusicApp {
     if (provider === 'spotify') return 'SP';
     if (provider === 'apple_music') return 'AM';
     if (provider === 'deezer') return 'DZ';
+    if (provider === 'tidal') return 'TD';
+    if (provider === 'soundcloud') return 'SC';
     if (urlHasHost(track.webpage_url || track.url || '', 'music.youtube.com')) return 'YTM';
     return 'YT';
   }
@@ -2507,7 +2509,7 @@ class YTLiveMusicApp {
   async playUrlInput() {
     const item = this.itemFromUrl(document.getElementById('quickUrlInput')?.value || '');
     if (!item) {
-      this.notify(this.tt('ytlive.url.invalid', 'Geçerli bir YouTube, Spotify, Deezer veya Apple Music linki gir.'), 'error');
+      this.notify(this.tt('ytlive.url.invalid', 'Geçerli bir YouTube, Spotify, Apple Music, Deezer, TIDAL veya SoundCloud linki gir.'), 'error');
       return;
     }
     try {
@@ -2524,7 +2526,7 @@ class YTLiveMusicApp {
   async addUrlInput() {
     const item = this.itemFromUrl(document.getElementById('quickUrlInput')?.value || '');
     if (!item) {
-      this.notify(this.tt('ytlive.url.invalid', 'Geçerli bir YouTube, Spotify, Deezer veya Apple Music linki gir.'), 'error');
+      this.notify(this.tt('ytlive.url.invalid', 'Geçerli bir YouTube, Spotify, Apple Music, Deezer, TIDAL veya SoundCloud linki gir.'), 'error');
       return;
     }
     await this.addItem(item);
@@ -2533,7 +2535,7 @@ class YTLiveMusicApp {
   addUrlInputToList(event) {
     const item = this.itemFromUrl(document.getElementById('quickUrlInput')?.value || '');
     if (!item) {
-      this.notify(this.tt('ytlive.url.invalid', 'Geçerli bir YouTube, Spotify, Deezer veya Apple Music linki gir.'), 'error');
+      this.notify(this.tt('ytlive.url.invalid', 'Geçerli bir YouTube, Spotify, Apple Music, Deezer, TIDAL veya SoundCloud linki gir.'), 'error');
       return;
     }
     this.openDownloadListMenu(event, item);
@@ -2542,7 +2544,7 @@ class YTLiveMusicApp {
   async playMappedMusicUrl(rawItem, { silent = false } = {}) {
     const item = this.normalizeItem(rawItem);
     const url = item.webpage_url || item.url || '';
-    if (!url) throw new Error(this.tt('ytlive.url.invalid', 'Geçerli bir YouTube, Spotify, Deezer veya Apple Music linki gir.'));
+    if (!url) throw new Error(this.tt('ytlive.url.invalid', 'Geçerli bir YouTube, Spotify, Apple Music, Deezer, TIDAL veya SoundCloud linki gir.'));
 
     this.notify(this.tt('ytlive.musicUrl.matching', 'Link eşleştiriliyor...'), 'info');
     const task = await this.startMappedMusicPreviewTask(item);
@@ -5268,6 +5270,26 @@ class YTLiveMusicApp {
     if (/^https?:\/\/(?:embed\.)?music\.apple\.com\//i.test(value)) {
       return 'apple_music';
     }
+    if (/^https?:\/\/(?:www\.|listen\.)?tidal\.com\//i.test(value)) {
+      return 'tidal';
+    }
+    if (/^https?:\/\/(?:www\.|m\.)?soundcloud\.com\//i.test(value)) {
+      try {
+        const parsed = new URL(value);
+        const parts = parsed.pathname.split('/').filter(Boolean);
+        const first = String(parts[0] || '').toLowerCase();
+        const second = String(parts[1] || '').toLowerCase();
+        const supportedSpecial =
+          ((first === 'discover' || first === 'buzzing-playlists') && second === 'sets' && !!parts[2]) ||
+          (first === 'stations' && second === 'track' && !!parts[2]);
+        if (supportedSpecial) return 'soundcloud';
+        if (['discover', 'charts', 'buzzing-playlists', 'stations'].includes(first)) return null;
+        if (second === 'sets' && parts[2]) return 'soundcloud';
+        if (['tracks', 'likes', 'reposts', 'sets', 'albums', 'popular-tracks', 'spotlight'].includes(second)) return 'soundcloud';
+        if (parts.length === 1 || parts.length >= 2) return 'soundcloud';
+      } catch {}
+      return null;
+    }
     return null;
   }
 
@@ -5275,6 +5297,8 @@ class YTLiveMusicApp {
     const value = String(source || '').toLowerCase();
     if (value === 'apple_music') return 'Apple Music';
     if (value === 'deezer') return 'Deezer';
+    if (value === 'tidal') return 'TIDAL';
+    if (value === 'soundcloud') return 'SoundCloud';
     return 'Spotify';
   }
 
@@ -5309,6 +5333,23 @@ class YTLiveMusicApp {
         if (appleType === 'album') return 'album';
         if (appleType === 'playlist') return 'playlist';
       }
+
+      if (host === 'tidal.com' || host === 'www.tidal.com' || host === 'listen.tidal.com') {
+        if (parts[0] === 'playlist' && parts[1]) return 'playlist';
+        if (parts[0] === 'album' && parts[1]) return parts[2] === 'track' && parts[3] ? 'track' : 'album';
+      }
+
+      if (host === 'soundcloud.com' || host.endsWith('.soundcloud.com')) {
+        const first = parts[0] || '';
+        const second = parts[1] || '';
+        if (first === 'discover' && second === 'sets' && parts[2]) return 'playlist';
+        if (first === 'buzzing-playlists' && second === 'sets' && parts[2]) return 'playlist';
+        if (first === 'stations' && second === 'track' && parts[2]) return 'playlist';
+        if (['discover', 'charts', 'buzzing-playlists', 'stations'].includes(first)) return 'playlist';
+        if (second === 'sets' && parts[2]) return 'playlist';
+        if (['tracks', 'likes', 'reposts', 'sets', 'albums', 'popular-tracks', 'spotlight'].includes(second) || parts.length === 1) return 'playlist';
+        if (parts.length >= 2) return 'track';
+      }
     } catch {}
 
     return 'playlist';
@@ -5325,6 +5366,10 @@ class YTLiveMusicApp {
       const type = this.getMappedMusicUrlType(value);
       if (type === 'track' && isHostOrSubdomain(parsed.hostname, 'apple.com')) {
         return parsed.searchParams.get('i') || parts[parts.length - 1] || '';
+      }
+      if (type === 'track' && (parsed.hostname === 'tidal.com' || parsed.hostname === 'www.tidal.com' || parsed.hostname === 'listen.tidal.com')) {
+        const trackIndex = parts.findIndex((part) => String(part).toLowerCase() === 'track');
+        return trackIndex >= 0 ? (parts[trackIndex + 1] || '') : '';
       }
       const typeIndex = parts.findIndex((part) => ['track', 'album', 'playlist'].includes(String(part).toLowerCase()));
       return typeIndex >= 0 ? (parts[typeIndex + 1] || '') : (parts[parts.length - 1] || '');

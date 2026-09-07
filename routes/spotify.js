@@ -36,6 +36,22 @@ import {
   resolveDeezerUrlTitle
 } from "../modules/deezer.js";
 import {
+  findTidalTrackMetaById,
+  findTidalTrackMetaByQuery,
+  isTidalUrl,
+  resolveTidalUrl,
+  resolveTidalUrlLite,
+  resolveTidalUrlTitle
+} from "../modules/tidal.js";
+import {
+  findSoundCloudTrackMetaById,
+  findSoundCloudTrackMetaByQuery,
+  isSoundCloudUrl,
+  resolveSoundCloudUrl,
+  resolveSoundCloudUrlLite,
+  resolveSoundCloudUrlTitle
+} from "../modules/soundcloud.js";
+import {
   resolveJobOutputDir,
   toDownloadPath,
   resolveDownloadPathToAbs
@@ -184,13 +200,15 @@ async function enrichMetaWithApple(meta, { fallbackArtist = "", fallbackTitle = 
 
 // Checks whether the URL belongs to Spotify or Apple Music mapped sources.
 function isMappedMusicUrl(url) {
-  return isSpotifyUrl(url) || isAppleMusicUrl(url) || isDeezerUrl(url);
+  return isSpotifyUrl(url) || isAppleMusicUrl(url) || isDeezerUrl(url) || isTidalUrl(url) || isSoundCloudUrl(url);
 }
 
 // Resolves the mapped music source from Spotify or Apple Music URLs.
 function musicSourceFromUrl(url) {
   if (isAppleMusicUrl(url)) return "apple_music";
   if (isDeezerUrl(url)) return "deezer";
+  if (isTidalUrl(url)) return "tidal";
+  if (isSoundCloudUrl(url)) return "soundcloud";
   return "spotify";
 }
 
@@ -199,6 +217,8 @@ function musicSourceLabel(source = "") {
   const value = String(source || "").toLowerCase();
   if (value === "apple_music") return "Apple Music";
   if (value === "deezer") return "Deezer";
+  if (value === "tidal") return "TIDAL";
+  if (value === "soundcloud") return "SoundCloud";
   return "Spotify";
 }
 
@@ -220,6 +240,8 @@ async function resolveMappedMusicUrlLite(
       maxItems
     });
   }
+  if (isTidalUrl(url)) return resolveTidalUrlLite(url, { market, maxItems });
+  if (isSoundCloudUrl(url)) return resolveSoundCloudUrlLite(url, { maxItems });
   return resolveSpotifyUrlLite(url, { market });
 }
 
@@ -227,6 +249,8 @@ async function resolveMappedMusicUrlLite(
 async function resolveMappedMusicUrl(url, { market } = {}) {
   if (isAppleMusicUrl(url)) return resolveAppleMusicUrl(url, { market });
   if (isDeezerUrl(url)) return resolveDeezerUrl(url, { market });
+  if (isTidalUrl(url)) return resolveTidalUrl(url, { market, maxItems: 1000 });
+  if (isSoundCloudUrl(url)) return resolveSoundCloudUrl(url, { maxItems: 1000 });
   return resolveSpotifyUrl(url, { market });
 }
 
@@ -253,6 +277,54 @@ async function findMappedTrackMeta(itemLite, source, market) {
     });
   }
 
+  if (source === "tidal") {
+    const title = String(itemLite?.title || "").trim();
+    const artist = String(itemLite?.artist || itemLite?.uploader || "").trim();
+    if (title && artist) {
+      return {
+        title,
+        track: title,
+        artist,
+        uploader: artist,
+        album: itemLite?.album || "",
+        album_artist: itemLite?.album_artist || artist,
+        release_year: itemLite?.year || "",
+        release_date: itemLite?.date || "",
+        track_number: itemLite?.track_number ?? null,
+        disc_number: itemLite?.disc_number ?? null,
+        track_total: itemLite?.track_total ?? null,
+        disc_total: itemLite?.disc_total ?? null,
+        isrc: itemLite?.isrc || "",
+        coverUrl: itemLite?.coverUrl || "",
+        duration_ms: itemLite?.duration_ms ?? null,
+        webpage_url: itemLite?.tidalUrl || itemLite?.webpage_url || "",
+        tidal_track_id: itemLite?.tidal_track_id ?? null,
+        tidal_album_id: itemLite?.tidal_album_id ?? null,
+        tidal_artist_id: itemLite?.tidal_artist_id ?? null,
+        source_provider: "tidal",
+        source_store: "tidal"
+      };
+    }
+    if (itemLite?.tidal_track_id) {
+      return findTidalTrackMetaById(itemLite.tidal_track_id, {
+        market,
+        albumId: itemLite?.tidal_album_id || null
+      });
+    }
+    return findTidalTrackMetaByQuery(itemLite?.artist, itemLite?.title, {
+      album: itemLite?.album || "",
+      market,
+      targetDurationMs: Number(itemLite?.duration_ms || 0) || null
+    });
+  }
+
+  if (source === "soundcloud") {
+    if (itemLite?.soundcloud_track_id || itemLite?.soundcloud_urn) {
+      return findSoundCloudTrackMetaById(itemLite.soundcloud_urn || itemLite.soundcloud_track_id, { item: itemLite });
+    }
+    return findSoundCloudTrackMetaByQuery(itemLite?.artist, itemLite?.title, { item: itemLite });
+  }
+
   if (itemLite?.spId) {
     return findSpotifyMetaById(itemLite.spId);
   }
@@ -273,6 +345,10 @@ router.post("/api/spotify/url-title", async (req, res) => {
       title = await resolveAppleMusicUrlTitle(url, { market });
     } else if (isDeezerUrl(url)) {
       title = await resolveDeezerUrlTitle(url);
+    } else if (isTidalUrl(url)) {
+      title = await resolveTidalUrlTitle(url, { market });
+    } else if (isSoundCloudUrl(url)) {
+      title = await resolveSoundCloudUrlTitle(url);
     } else {
       title = await resolveSpotifyUrlTitle(url);
     }
@@ -370,7 +446,7 @@ router.post("/api/spotify/process/start", async (req, res) => {
     const loudnormFlag = isEnabledFlag(loudnorm);
     const loudnormModeNormalized = normalizeLoudnormMode(loudnormMode);
     if (!url || !isMappedMusicUrl(url)) {
-      return sendError(res, 'UNSUPPORTED_URL_FORMAT', "Spotify, Apple Music, or Deezer URL is required", 400);
+      return sendError(res, 'UNSUPPORTED_URL_FORMAT', "Spotify, Apple Music, Deezer, TIDAL, or SoundCloud URL is required", 400);
     }
 
     const source = musicSourceFromUrl(url);
@@ -632,7 +708,7 @@ async function processSpotifyIntegrated(jobId, sp, format, bitrate, { market } =
             isrc: itemLite.isrc || "",
             release_year: itemLite.year || "",
             release_date: itemLite.date || "",
-            webpage_url: itemLite.spUrl || itemLite.amUrl || itemLite.webpage_url || "",
+            webpage_url: itemLite.spUrl || itemLite.amUrl || itemLite.deezerUrl || itemLite.dzUrl || itemLite.tidalUrl || itemLite.soundcloudUrl || itemLite.scUrl || itemLite.webpage_url || "",
             genre: itemLite.genre || "",
             label: itemLite.label || "",
             publisher: itemLite.label || "",
@@ -1080,7 +1156,7 @@ async function processSpotifyIntegrated(jobId, sp, format, bitrate, { market } =
     job.playlist.downloadTotal = matchedCount;
     job.playlist.convertTotal  = matchedCount;
 
-    if (isVideoFormatFlag && (job.metadata?.source === "spotify" || job.metadata?.source === "apple_music" || job.metadata?.source === "deezer")) {
+    if (isVideoFormatFlag && ["spotify", "apple_music", "deezer", "tidal", "soundcloud"].includes(job.metadata?.source)) {
       console.log(`🎬 Redirecting ${sourceLabel} to video processing: ${matchedCount} track(s)`);
 
       const trackCount = matchedCount;
@@ -1597,7 +1673,7 @@ router.post("/api/spotify/preview/start", async (req, res) => {
   try {
     const { url, market: marketIn } = req.body || {};
     if (!url || !isMappedMusicUrl(url)) {
-      return sendError(res, 'UNSUPPORTED_URL_FORMAT', "Spotify, Apple Music, or Deezer URL is required", 400);
+      return sendError(res, 'UNSUPPORTED_URL_FORMAT', "Spotify, Apple Music, Deezer, TIDAL, or SoundCloud URL is required", 400);
     }
 
     const source = musicSourceFromUrl(url);

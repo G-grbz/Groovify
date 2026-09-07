@@ -120,6 +120,8 @@ export class MediaConverterApp {
             host === 'www.deezer.com' ||
             host.endsWith('.deezer.com') ||
             host.endsWith('deezer.page.link');
+            const isTidalHost = host === 'tidal.com' || host === 'www.tidal.com' || host === 'listen.tidal.com';
+            const isSoundCloudHost = host === 'soundcloud.com' || host.endsWith('.soundcloud.com');
 
             if (isAppleHost) {
                 const parts = url.pathname.split('/').filter(Boolean);
@@ -127,6 +129,15 @@ export class MediaConverterApp {
                 if (url.searchParams.has('i')) return 'track';
                 if (['song', 'album', 'playlist'].includes(t)) {
                     return t === 'song' ? 'track' : t;
+                }
+                return null;
+            }
+
+            if (isTidalHost) {
+                const parts = url.pathname.split('/').filter(Boolean).map((part) => part.toLowerCase());
+                if (parts[0] === 'playlist' && parts[1]) return 'playlist';
+                if (parts[0] === 'album' && parts[1]) {
+                    return parts[2] === 'track' && parts[3] ? 'track' : 'album';
                 }
                 return null;
             }
@@ -159,6 +170,20 @@ export class MediaConverterApp {
                     : ['track', 'album', 'playlist', 'artist'].includes(second) ? 1
                     : -1;
                 if (typeIndex >= 0) return (parts[typeIndex] || '').toLowerCase();
+                return null;
+            }
+
+            if (isSoundCloudHost) {
+                const parts = url.pathname.split('/').filter(Boolean);
+                const first = (parts[0] || '').toLowerCase();
+                const second = (parts[1] || '').toLowerCase();
+                if (first === 'discover' && second === 'sets' && parts[2]) return 'playlist';
+                if (first === 'buzzing-playlists' && second === 'sets' && parts[2]) return 'playlist';
+                if (first === 'stations' && second === 'track' && parts[2]) return 'playlist';
+                if (['discover', 'charts', 'buzzing-playlists', 'stations'].includes(first)) return null;
+                if (second === 'sets' && parts[2]) return 'playlist';
+                if (['tracks', 'likes', 'reposts', 'sets', 'albums', 'popular-tracks', 'spotlight'].includes(second) || parts.length === 1) return 'playlist';
+                if (parts.length >= 2) return 'track';
                 return null;
             }
 
@@ -1224,7 +1249,7 @@ export class MediaConverterApp {
     // Checks whether mapped music source URL is valid for the browser UI layer.
     isSpotifyUrl(u) {
         const s = String(u || "").trim();
-        return /^(spotify:|deezer:(track|album|playlist|artist):|https?:\/\/(open\.spotify\.com|spotify\.link|spotify\.app\.link|(?:embed\.)?music\.apple\.com|(?:(?:www|link)\.)?deezer\.com|(?:[\w-]+\.)?deezer\.page\.link))/i.test(s);
+        return /^(spotify:|deezer:(track|album|playlist|artist):|https?:\/\/(open\.spotify\.com|spotify\.link|spotify\.app\.link|(?:embed\.)?music\.apple\.com|(?:(?:www|link)\.)?deezer\.com|(?:[\w-]+\.)?deezer\.page\.link|(?:www\.|listen\.)?tidal\.com|(?:www\.|m\.)?soundcloud\.com))/i.test(s);
     }
 
     // Checks whether youtube playlist data URL is valid for the browser UI layer.

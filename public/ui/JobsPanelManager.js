@@ -648,6 +648,8 @@ export class JobsPanelManager {
             spotify: `🎵 ${this.t('jobsPanel.sourceSpotify')}`,
             apple_music: `🎵 ${this.t('jobsPanel.sourceAppleMusic')}`,
             deezer: `🎵 ${this.t('jobsPanel.sourceDeezer')}`,
+            tidal: `🎵 ${this.t('jobsPanel.sourceTidal')}`,
+            soundcloud: `🎵 ${this.t('jobsPanel.sourceSoundCloud')}`,
             direct_url: `🌐 ${this.t('jobsPanel.sourceURL')}`,
             file: `💾 ${this.t('jobsPanel.sourceFile')}`,
             local: `💻 ${this.t('jobsPanel.sourceLocal')}`

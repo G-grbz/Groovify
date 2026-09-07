@@ -10,6 +10,8 @@ import {
 import { isSpotifyUrl, resolveSpotifyUrl } from "../modules/spotify.js";
 import { isAppleMusicUrl, resolveAppleMusicUrl } from "../modules/apple.js";
 import { isDeezerUrl, resolveDeezerUrl } from "../modules/deezer.js";
+import { isTidalUrl, resolveTidalUrl } from "../modules/tidal.js";
+import { isSoundCloudUrl, resolveSoundCloudUrl } from "../modules/soundcloud.js";
 import {
   getMappedMusicSourceItemId,
   getMappedMusicSourceItemUrl,
@@ -22,18 +24,22 @@ import { resolveSpotifyConcurrency } from "../modules/concurrency.js";
 const router = express.Router();
 
 function isMappedMusicUrl(url = "") {
-  return isSpotifyUrl(url) || isAppleMusicUrl(url) || isDeezerUrl(url);
+  return isSpotifyUrl(url) || isAppleMusicUrl(url) || isDeezerUrl(url) || isTidalUrl(url) || isSoundCloudUrl(url);
 }
 
 function mappedMusicSource(url = "") {
   if (isAppleMusicUrl(url)) return "apple_music";
   if (isDeezerUrl(url)) return "deezer";
+  if (isTidalUrl(url)) return "tidal";
+  if (isSoundCloudUrl(url)) return "soundcloud";
   return "spotify";
 }
 
 async function resolveMappedMusicUrl(url, { market } = {}) {
   if (isAppleMusicUrl(url)) return resolveAppleMusicUrl(url, { market });
   if (isDeezerUrl(url)) return resolveDeezerUrl(url, { market });
+  if (isTidalUrl(url)) return resolveTidalUrl(url, { market, maxItems: 1000 });
+  if (isSoundCloudUrl(url)) return resolveSoundCloudUrl(url, { maxItems: 1000 });
   return resolveSpotifyUrl(url, { market });
 }
 
@@ -98,6 +104,13 @@ function downloadListItemToMappedSourceItem(item = {}, source = "") {
   } else if (source === "apple_music") {
     out.apple_track_id = item.sourceItemId || null;
     out.amUrl = sourceItemUrl;
+  } else if (source === "tidal") {
+    out.tidal_track_id = item.sourceItemId || null;
+    out.tidalUrl = sourceItemUrl;
+  } else if (source === "soundcloud") {
+    out.soundcloud_track_id = item.sourceItemId || null;
+    out.soundcloudUrl = sourceItemUrl;
+    out.scUrl = sourceItemUrl;
   }
 
   return out;
@@ -175,7 +188,7 @@ router.post("/api/ytlive/download-lists/:id/resolve", async (req, res) => {
     const source = mappedMusicSource(sourceUrl);
     const sourceItems = (Array.isArray(list.items) ? list.items : [])
       .map((item) => downloadListItemToMappedSourceItem(item, source))
-      .filter((item) => item.title && (item.webpage_url || item.spId || item.deezer_track_id || item.apple_track_id));
+      .filter((item) => item.title && (item.webpage_url || item.spId || item.deezer_track_id || item.apple_track_id || item.tidal_track_id || item.soundcloud_track_id));
 
     if (!sourceItems.length) {
       return sendError(res, "LIST_RESOLVE_EMPTY", "No resolvable items were found", 404);
@@ -242,7 +255,7 @@ router.post("/api/ytlive/download-lists/:id/resolve/start", async (req, res) => 
     const source = mappedMusicSource(sourceUrl);
     const sourceItems = (Array.isArray(list.items) ? list.items : [])
       .map((item) => downloadListItemToMappedSourceItem(item, source))
-      .filter((item) => item.title && (item.webpage_url || item.spId || item.deezer_track_id || item.apple_track_id));
+      .filter((item) => item.title && (item.webpage_url || item.spId || item.deezer_track_id || item.apple_track_id || item.tidal_track_id || item.soundcloud_track_id));
 
     if (!sourceItems.length) {
       return sendError(res, "LIST_RESOLVE_EMPTY", "No resolvable items were found", 404);

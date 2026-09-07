@@ -17,13 +17,15 @@ import { ensureOwnership } from "./fsOwnership.js";
 
 function isMappedMusicSource(source = "") {
   const value = String(source || "").toLowerCase();
-  return value === "spotify" || value === "apple_music" || value === "deezer";
+  return value === "spotify" || value === "apple_music" || value === "deezer" || value === "tidal" || value === "soundcloud";
 }
 
 function mappedMusicLabel(source = "") {
   const value = String(source || "").toLowerCase();
   if (value === "apple_music") return "Apple Music";
   if (value === "deezer") return "Deezer";
+  if (value === "tidal") return "TIDAL";
+  if (value === "soundcloud") return "SoundCloud";
   return "Spotify";
 }
 
@@ -34,6 +36,10 @@ function mappedMusicPlaylistTitle(job) {
     ? "Apple Music Playlist"
     : value === "deezer"
     ? "Deezer Playlist"
+    : value === "tidal"
+    ? "TIDAL Playlist"
+    : value === "soundcloud"
+    ? "SoundCloud Playlist"
     : "Spotify Playlist";
   return job?.metadata?.spotifyTitle || fallback;
 }

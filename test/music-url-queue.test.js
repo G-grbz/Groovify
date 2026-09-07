@@ -95,6 +95,7 @@ test('music URL queue provider detection parses hostnames instead of trusting UR
   assert.equal(manager.getProvider('https://open.spotify.com/album/123ABC'), 'Spotify');
   assert.equal(manager.getProvider('https://music.apple.com/tr/album/example/123456789'), 'Apple Music');
   assert.equal(manager.getProvider('https://www.deezer.com/tr/album/123456'), 'Deezer');
+  assert.equal(manager.getProvider('https://soundcloud.com/buzzing-playlists/sets/buzzing-mexico'), 'SoundCloud');
 
   assert.equal(manager.getProvider('https://evil.example/?next=https://music.apple.com/tr/album/1'), 'musicQueue.unknownProvider');
   assert.equal(manager.getProvider('https://music.apple.com.evil.example/album/1'), 'musicQueue.unknownProvider');
@@ -118,6 +119,17 @@ test('music URL queue support indicator mirrors supported mapped-music URL shape
   assert.equal(manager.isSupportedUrl('https://www.deezer.com/search/Ahmet%20Kaya/track'), true);
   assert.equal(manager.isSupportedUrl('https://www.deezer.com/tr/smarttracklist/inspired-by-1234'), true);
   assert.equal(manager.isSupportedUrl('https://abc.deezer.page.link/xyz'), true);
+
+  assert.equal(manager.isSupportedUrl('https://soundcloud.com/example-user/example-track'), true);
+  assert.equal(manager.isSupportedUrl('https://soundcloud.com/example-user/sets/example-set'), true);
+  assert.equal(manager.isSupportedUrl('https://soundcloud.com/example-user/likes'), true);
+  assert.equal(manager.isSupportedUrl('https://soundcloud.com/example-user/reposts'), true);
+  assert.equal(manager.isSupportedUrl('https://soundcloud.com/buzzing-playlists/sets/buzzing-mexico'), true);
+  assert.equal(manager.isSupportedUrl('https://soundcloud.com/discover/sets/charts-top:all-music:de'), true);
+  assert.equal(manager.isSupportedUrl('https://soundcloud.com/stations/track/example-user/example-track'), true);
+  assert.equal(manager.isSupportedUrl('https://soundcloud.com/charts/top'), false);
+  assert.equal(manager.isSupportedUrl('https://soundcloud.com/buzzing-playlists'), false);
+
   assert.equal(manager.isSupportedUrl('https://www.youtube.com/watch?v=abc'), false);
 });
 

@@ -184,6 +184,10 @@ export function pickPlaylistOutputName(job) {
       ? "Apple Music Playlist"
       : meta.source === "deezer"
       ? "Deezer Playlist"
+      : meta.source === "tidal"
+      ? "TIDAL Playlist"
+      : meta.source === "soundcloud"
+      ? "SoundCloud Playlist"
       : "Playlist");
 
   const fmt = String(job?.format || "")

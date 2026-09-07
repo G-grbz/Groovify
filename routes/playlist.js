@@ -21,6 +21,8 @@ import {
 import { isSpotifyUrl, resolveSpotifyUrl } from "../modules/spotify.js";
 import { isAppleMusicUrl, resolveAppleMusicUrl } from "../modules/apple.js";
 import { isDeezerUrl, resolveDeezerUrl } from "../modules/deezer.js";
+import { isTidalUrl, resolveTidalUrl } from "../modules/tidal.js";
+import { isSoundCloudUrl, resolveSoundCloudUrl } from "../modules/soundcloud.js";
 import { mapMappedMusicWithCache } from "../modules/mappedMusicCache.js";
 import { resolveMarket } from "../modules/market.js";
 import { resolveSpotifyConcurrency } from "../modules/concurrency.js";
@@ -30,6 +32,8 @@ const router = express.Router();
 function mappedSourceValue(url) {
   if (isAppleMusicUrl(url)) return "apple_music";
   if (isDeezerUrl(url)) return "deezer";
+  if (isTidalUrl(url)) return "tidal";
+  if (isSoundCloudUrl(url)) return "soundcloud";
   return "spotify";
 }
 
@@ -40,12 +44,18 @@ function mappedItemUrl(item = {}, source = "") {
   if (source === "deezer") {
     return item.deezerUrl || item.dzUrl || item.webpage_url || "";
   }
+  if (source === "tidal") {
+    return item.tidalUrl || item.webpage_url || "";
+  }
+  if (source === "soundcloud") return item.soundcloudUrl || item.scUrl || item.webpage_url || "";
   return item.spUrl || item.webpage_url || "";
 }
 
 function mappedItemId(item = {}, source = "") {
   if (source === "apple_music") return item.apple_track_id || null;
   if (source === "deezer") return item.deezer_track_id || null;
+  if (source === "tidal") return item.tidal_track_id || null;
+  if (source === "soundcloud") return item.soundcloud_urn || item.soundcloud_track_id || null;
   return item.spId || null;
 }
 
@@ -179,19 +189,27 @@ router.post("/api/playlist/preview", async (req, res) => {
   try {
     const { url, page = 1, pageSize = 25 } = req.body || {};
 
-    if (url && (isSpotifyUrl(url) || isAppleMusicUrl(url) || isDeezerUrl(url))) {
+    if (url && (isSpotifyUrl(url) || isAppleMusicUrl(url) || isDeezerUrl(url) || isTidalUrl(url) || isSoundCloudUrl(url))) {
       const shouldMatch = req.body?.match !== false && req.body?.metadataOnly !== true;
       const source = mappedSourceValue(url);
       const sourceLabel = isAppleMusicUrl(url)
         ? "Apple Music"
         : isDeezerUrl(url)
         ? "Deezer"
+        : isTidalUrl(url)
+        ? "TIDAL"
+        : isSoundCloudUrl(url)
+        ? "SoundCloud"
         : "Spotify";
       try {
         const sp = isAppleMusicUrl(url)
           ? await resolveAppleMusicUrl(url, { market: resolveMarket(req.body?.market) })
           : isDeezerUrl(url)
           ? await resolveDeezerUrl(url, { market: resolveMarket(req.body?.market) })
+          : isTidalUrl(url)
+          ? await resolveTidalUrl(url, { market: resolveMarket(req.body?.market), maxItems: 1000 })
+          : isSoundCloudUrl(url)
+          ? await resolveSoundCloudUrl(url, { maxItems: 1000 })
           : await resolveSpotifyUrl(url, { market: resolveMarket(req.body?.market) });
         const ps = Math.max(1, Math.min(100, Number(pageSize) || 25));
         const p  = Math.max(1, Number(page) || 1);

@@ -24,6 +24,8 @@ import {
   isDeezerUrl,
   resolveDeezerUrl
 } from "../modules/deezer.js";
+import { isTidalUrl, resolveTidalUrl } from "../modules/tidal.js";
+import { isSoundCloudUrl, resolveSoundCloudUrl } from "../modules/soundcloud.js";
 import { mapMappedMusicWithCache } from "../modules/mappedMusicCache.js";
 import { resolveMarket } from "../modules/market.js";
 import { requireAuth } from "../modules/settings.js"
@@ -286,12 +288,14 @@ function resolveMediaPlatform(meta = {}) {
 }
 
 function isMappedMusicUrl(url = "") {
-  return isSpotifyUrl(url) || isAppleMusicUrl(url) || isDeezerUrl(url);
+  return isSpotifyUrl(url) || isAppleMusicUrl(url) || isDeezerUrl(url) || isTidalUrl(url) || isSoundCloudUrl(url);
 }
 
 function mappedMusicSource(url = "") {
   if (isAppleMusicUrl(url)) return "apple_music";
   if (isDeezerUrl(url)) return "deezer";
+  if (isTidalUrl(url)) return "tidal";
+  if (isSoundCloudUrl(url)) return "soundcloud";
   return "spotify";
 }
 
@@ -299,12 +303,16 @@ function mappedMusicLabel(source = "") {
   const value = String(source || "").toLowerCase();
   if (value === "apple_music") return "Apple Music";
   if (value === "deezer") return "Deezer";
+  if (value === "tidal") return "TIDAL";
+  if (value === "soundcloud") return "SoundCloud";
   return "Spotify";
 }
 
 async function resolveMappedMusicUrl(url, { market } = {}) {
   if (isAppleMusicUrl(url)) return resolveAppleMusicUrl(url, { market });
   if (isDeezerUrl(url)) return resolveDeezerUrl(url, { market });
+  if (isTidalUrl(url)) return resolveTidalUrl(url, { market, maxItems: 1000 });
+  if (isSoundCloudUrl(url)) return resolveSoundCloudUrl(url, { maxItems: 1000 });
   return resolveSpotifyUrl(url, { market });
 }
 

@@ -3,7 +3,10 @@ import fs from "fs";
 import path from "path";
 import { parseAppleMusicUrl } from "./apple.js";
 import { parseDeezerUrl } from "./deezer.js";
+import { parseTidalUrl } from "./tidal.js";
+import { parseSoundCloudUrl } from "./soundcloud.js";
 import { idsToMusicUrls, mapSpotifyToYtm } from "./sp.js";
+import { isCatalogMusicProvider } from "./mappedMusicMatcher.js";
 import { parseSpotifyUrl } from "./spotify.js";
 
 const BASE_DIR = process.env.DATA_DIR || process.cwd();
@@ -92,6 +95,8 @@ function detectSource(url = "") {
       host.endsWith(".deezer.page.link")
     ) return "deezer";
     if (host === "music.apple.com" || host === "embed.music.apple.com") return "apple_music";
+    if (host === "tidal.com" || host === "www.tidal.com" || host === "listen.tidal.com") return "tidal";
+    if (host === "soundcloud.com" || host.endsWith(".soundcloud.com")) return "soundcloud";
   } catch {}
   return "mapped_music";
 }
@@ -121,6 +126,23 @@ export function getMappedMusicSourceKey(rawUrl = "", sourceHint = "") {
     const parsed = parseAppleMusicUrl(url);
     if (parsed?.type && parsed?.id && parsed.type !== "unknown") {
       return `apple_music:${parsed.type}:${parsed.id}`;
+    }
+  }
+
+  if (source === "tidal") {
+    const parsed = parseTidalUrl(url);
+    if (parsed?.type && parsed?.id && parsed.type !== "unknown") {
+      const id = parsed.type === "track" && parsed.albumId
+        ? `${parsed.albumId}:${parsed.id}`
+        : parsed.id;
+      return `tidal:${parsed.type}:${id}`;
+    }
+  }
+
+  if (source === "soundcloud") {
+    const parsed = parseSoundCloudUrl(url);
+    if (parsed?.type && parsed?.id && parsed.type !== "unknown") {
+      return `soundcloud:${parsed.type}:${parsed.id}`;
     }
   }
 
@@ -232,6 +254,11 @@ function normalizeManifestEntry(raw = {}, fallbackIndex = 0) {
     youtubeId: youtubeId || null,
     youtubeTitle: safeString(raw.youtubeTitle || raw.title, 500),
     youtubeUploader: safeString(raw.youtubeUploader || raw.uploader, 500),
+    youtubeDuration_ms: toDurationMs(raw.youtubeDuration_ms ?? raw.youtubeDurationMs) ||
+      (Number.isFinite(Number(raw.youtubeDuration)) && Number(raw.youtubeDuration) > 0
+        ? Number(raw.youtubeDuration) * 1000
+        : null),
+    matchValidationVersion: Math.max(0, Number(raw.matchValidationVersion || 0) || 0),
     youtubeUrl,
     thumbnail: safeString(raw.thumbnail, 1500) || null,
     matchedAt: raw.matchedAt || nowIso(),
@@ -281,6 +308,14 @@ function parseProviderTrackIdFromUrl(rawUrl = "", source = "") {
     const parsed = parseAppleMusicUrl(value);
     return parsed?.type === "track" ? String(parsed.id || "") : "";
   }
+  if (source === "tidal") {
+    const parsed = parseTidalUrl(value);
+    return parsed?.type === "track" ? String(parsed.id || "") : "";
+  }
+  if (source === "soundcloud") {
+    const parsed = parseSoundCloudUrl(value);
+    return parsed?.type === "track" ? String(parsed.id || "") : "";
+  }
   return "";
 }
 
@@ -291,6 +326,10 @@ export function getMappedMusicSourceItemUrl(item = {}, source = "") {
   if (source === "deezer") {
     return item.deezerUrl || item.dzUrl || item.webpage_url || "";
   }
+  if (source === "tidal") {
+    return item.tidalUrl || item.webpage_url || "";
+  }
+  if (source === "soundcloud") return item.soundcloudUrl || item.scUrl || item.webpage_url || "";
   return item.spUrl || item.webpage_url || "";
 }
 
@@ -300,6 +339,12 @@ export function getMappedMusicSourceItemId(item = {}, source = "") {
   }
   if (source === "deezer") {
     return String(item.deezer_track_id || parseProviderTrackIdFromUrl(getMappedMusicSourceItemUrl(item, source), source) || "").trim();
+  }
+  if (source === "tidal") {
+    return String(item.tidal_track_id || parseProviderTrackIdFromUrl(getMappedMusicSourceItemUrl(item, source), source) || "").trim();
+  }
+  if (source === "soundcloud") {
+    return String(item.soundcloud_urn || item.soundcloud_track_id || parseProviderTrackIdFromUrl(getMappedMusicSourceItemUrl(item, source), source) || "").trim();
   }
   return String(item.spId || parseProviderTrackIdFromUrl(getMappedMusicSourceItemUrl(item, source), source) || "").trim();
 }
@@ -342,6 +387,10 @@ function manifestEntryFromMatch({
     youtubeId,
     youtubeTitle: matchItem?.title || "",
     youtubeUploader: matchItem?.uploader || "",
+    youtubeDuration_ms: Number.isFinite(Number(matchItem?.duration)) && Number(matchItem?.duration) > 0
+      ? Number(matchItem.duration) * 1000
+      : null,
+    matchValidationVersion: source === "soundcloud" ? 1 : (isCatalogMusicProvider(source) ? 2 : 0),
     youtubeUrl: matchItem?.webpage_url || (youtubeId ? idsToMusicUrls([youtubeId])[0] : ""),
     thumbnail: matchItem?.thumbnail || null,
     matchedAt: nowIso(),
@@ -408,9 +457,17 @@ export async function mapMappedMusicWithCache(
     const sourceItem = items[localIndex];
     const sourceItemKey = getMappedMusicSourceItemKey(sourceItem, sourceProvider);
     const cached = existingByKey.get(sourceItemKey);
+    const requiredMatchValidationVersion = sourceProvider === "soundcloud"
+      ? 1
+      : (isCatalogMusicProvider(sourceProvider) ? 2 : 0);
+    const needsMatchRevalidation =
+      cached &&
+      requiredMatchValidationVersion > 0 &&
+      Number(cached.matchValidationVersion || 0) < requiredMatchValidationVersion;
     const useCached =
       cached &&
       !forceRefresh &&
+      !needsMatchRevalidation &&
       !(refreshUnmatched && !cached.youtubeId);
 
     if (useCached) {
@@ -441,7 +498,7 @@ export async function mapMappedMusicWithCache(
 
   if (missingItems.length > 0) {
     await mapSpotifyToYtm(
-      { ...sp, items: missingItems },
+      { ...sp, provider: sourceProvider, items: missingItems },
       (missingLocalIndex, matchItem) => {
         const localIndex = missingIndexes[missingLocalIndex];
         const sourceItem = items[localIndex];

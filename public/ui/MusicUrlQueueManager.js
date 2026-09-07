@@ -349,6 +349,8 @@ export class MusicUrlQueueManager {
         const host = parsed.hostname.toLowerCase();
         if (host === 'open.spotify.com') return 'Spotify';
         if (host === 'music.apple.com' || host === 'embed.music.apple.com') return 'Apple Music';
+        if (host === 'tidal.com' || host === 'www.tidal.com' || host === 'listen.tidal.com') return 'TIDAL';
+        if (host === 'soundcloud.com' || host.endsWith('.soundcloud.com')) return 'SoundCloud';
         if (
             host === 'deezer.com'
             || host.endsWith('.deezer.com')
@@ -408,6 +410,30 @@ export class MusicUrlQueueManager {
             if (type === 'album') return /^\d+$/.test(lastPart);
             if (type === 'playlist') return !!lastPart;
             return false;
+        }
+
+        if (host === 'tidal.com' || host === 'www.tidal.com' || host === 'listen.tidal.com') {
+            const type = String(parts[0] || '').toLowerCase();
+            if (type === 'playlist') return /^[0-9a-f-]{16,64}$/i.test(String(parts[1] || ''));
+            if (type === 'album') {
+                if (!/^\d+$/.test(String(parts[1] || ''))) return false;
+                if (String(parts[2] || '').toLowerCase() === 'track') return /^\d+$/.test(String(parts[3] || ''));
+                return parts.length >= 2;
+            }
+            return false;
+        }
+
+        if (host === 'soundcloud.com' || host.endsWith('.soundcloud.com')) {
+            const first = String(parts[0] || '').toLowerCase();
+            const second = String(parts[1] || '').toLowerCase();
+            if (!first) return false;
+            if (first === 'discover') return second === 'sets' && !!parts[2];
+            if (first === 'buzzing-playlists') return second === 'sets' && !!parts[2];
+            if (first === 'stations') return second === 'track' && !!parts[2];
+            if (['discover', 'charts', 'buzzing-playlists', 'stations'].includes(first)) return false;
+            if (second === 'sets') return !!parts[2] || parts.length === 2;
+            if (['tracks', 'likes', 'reposts', 'sets', 'albums', 'popular-tracks', 'spotlight'].includes(second)) return true;
+            return parts.length >= 1;
         }
 
         if (host === 'link.deezer.com' || host === 'deezer.page.link' || host.endsWith('.deezer.page.link')) {

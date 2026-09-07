@@ -268,6 +268,8 @@ export class JobManager {
         if (source === 'spotify') return 'spotify';
         if (source === 'apple_music') return 'apple_music';
         if (source === 'deezer') return 'deezer';
+        if (source === 'tidal') return 'tidal';
+        if (source === 'soundcloud') return 'soundcloud';
 
         const urlCandidate =
             job?.metadata?.url ||
@@ -284,6 +286,8 @@ export class JobManager {
         if (platform === 'spotify') return this.app.t('ui.spotifyPlaylist');
         if (platform === 'apple_music') return this.app.t('ui.appleMusicPlaylist');
         if (platform === 'deezer') return this.app.t('ui.deezerPlaylist');
+        if (platform === 'tidal') return this.app.t('ui.tidalPlaylist');
+        if (platform === 'soundcloud') return this.app.t('ui.soundCloudPlaylist');
         if (platform === 'dailymotion') return this.app.t('ui.dailymotionPlaylist');
         return this.app.t('ui.youtubePlaylist');
     }
@@ -294,6 +298,8 @@ export class JobManager {
         if (src === 'spotify') return this.app.t('ui.spotifyPlaylist');
         if (src === 'apple_music') return this.app.t('ui.appleMusicPlaylist');
         if (src === 'deezer') return this.app.t('ui.deezerPlaylist');
+        if (src === 'tidal') return this.app.t('ui.tidalPlaylist');
+        if (src === 'soundcloud') return this.app.t('ui.soundCloudPlaylist');
         if (src === 'dailymotion') return this.app.t('ui.dailymotionPlaylist');
         if (src === 'youtube') return this.app.t('ui.youtubePlaylist');
         if (meta?.source) return String(meta.source);
@@ -606,6 +612,10 @@ computeProg(job) {
                 ? (job.metadata?.spotifyTitle || this.app.t('ui.appleMusicPlaylist'))
                 : job.metadata?.source === 'deezer'
                 ? (job.metadata?.spotifyTitle || this.app.t('ui.deezerPlaylist'))
+                : job.metadata?.source === 'tidal'
+                ? (job.metadata?.spotifyTitle || this.app.t('ui.tidalPlaylist'))
+                : job.metadata?.source === 'soundcloud'
+                ? (job.metadata?.spotifyTitle || this.app.t('ui.soundCloudPlaylist'))
                 : this.playlistSourceTitle(job))
         );
     }
@@ -914,7 +924,9 @@ updateJobUI(job, batchId = null) {
 	    const isMusicMatchJob =
 	        job.metadata?.source === 'spotify' ||
 	        job.metadata?.source === 'apple_music' ||
-	        job.metadata?.source === 'deezer';
+	        job.metadata?.source === 'deezer' ||
+	        job.metadata?.source === 'tidal' ||
+	        job.metadata?.source === 'soundcloud';
 
 	    let phaseInfo = '';
 	    if (isMusicMatchJob && job.phase) {
@@ -1481,6 +1493,12 @@ updateJobUI(job, batchId = null) {
     }
     if (job.metadata?.source === 'deezer') {
         jobTitle = `🎵 ${job.metadata.spotifyTitle || this.app.t('ui.deezerPlaylist')}`;
+    }
+    if (job.metadata?.source === 'tidal') {
+        jobTitle = `🎵 ${job.metadata.spotifyTitle || this.app.t('ui.tidalPlaylist')}`;
+    }
+    if (job.metadata?.source === 'soundcloud') {
+        jobTitle = `🎵 ${job.metadata.spotifyTitle || this.app.t('ui.soundCloudPlaylist')}`;
     }
     {
         const nowTrack = this.uiNowTitle(job);

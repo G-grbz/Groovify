@@ -19,6 +19,15 @@ import {
   resolveRingtoneSegment
 } from "./ringtone.js";
 
+const FFMPEG_STALL_TIMEOUT_MS = Math.max(
+  30000,
+  Number(process.env.FFMPEG_STALL_TIMEOUT_MS || 90000)
+);
+const FFMPEG_WATCHDOG_POLL_MS = Math.max(
+  1000,
+  Math.min(10000, Number(process.env.FFMPEG_WATCHDOG_POLL_MS || 5000))
+);
+
 // Returns optimal encoder params used for the FFmpeg media conversion pipeline.
 function getOptimalEncoderParams(codec, hardware, quality = 'medium') {
     const params = {
@@ -3064,7 +3073,32 @@ function computeWidthForScaling({ scaleMode, targetWidth, srcW }) {
     let stderrData = "";
     let parseWindow = "";
     let canceledByFlag = false;
+    let ffmpegWatchdogTimedOut = false;
+    let ffmpegLastActivityAt = Date.now();
+    let ffmpegWatchdog = null;
     const ffmpegStartedAt = Date.now();
+
+    const stopFfmpegWatchdog = () => {
+      if (ffmpegWatchdog) clearInterval(ffmpegWatchdog);
+      ffmpegWatchdog = null;
+    };
+
+    const touchFfmpegWatchdog = () => {
+      ffmpegLastActivityAt = Date.now();
+    };
+
+    ffmpegWatchdog = setInterval(() => {
+      if ((Date.now() - ffmpegLastActivityAt) < FFMPEG_STALL_TIMEOUT_MS) return;
+      ffmpegWatchdogTimedOut = true;
+      stopFfmpegWatchdog();
+      console.error(
+        `❌ FFmpeg stalled for ${Math.round(FFMPEG_STALL_TIMEOUT_MS / 1000)}s; terminating worker`
+      );
+      try {
+        ffmpeg.kill("SIGKILL");
+      } catch {}
+    }, FFMPEG_WATCHDOG_POLL_MS);
+    ffmpegWatchdog.unref?.();
 
     // Formats seconds to HH:MM:SS for conversion progress display.
     const formatClock = (sec) => {
@@ -3154,6 +3188,7 @@ function computeWidthForScaling({ scaleMode, targetWidth, srcW }) {
     };
 
     ffmpeg.stderr.on("data", (d) => {
+      touchFfmpegWatchdog();
       const chunk = d.toString();
       stderrData += chunk;
       parseWindow += chunk;
@@ -3264,7 +3299,20 @@ function computeWidthForScaling({ scaleMode, targetWidth, srcW }) {
     });
 
     ffmpeg.on("close", async (code, signal) => {
+      stopFfmpegWatchdog();
       const actualOut = outputPath;
+
+      if (ffmpegWatchdogTimedOut) {
+        try {
+          if (actualOut && fs.existsSync(actualOut)) fs.unlinkSync(actualOut);
+        } catch {}
+        return reject(
+          new Error(
+            `FFmpeg stalled for ${Math.round(FFMPEG_STALL_TIMEOUT_MS / 1000)}s`
+          )
+        );
+      }
+
       const signalTerminated =
         signal === "SIGTERM" ||
         signal === "SIGKILL" ||
@@ -3315,6 +3363,7 @@ function computeWidthForScaling({ scaleMode, targetWidth, srcW }) {
     });
 
     ffmpeg.on("error", (e) => {
+      stopFfmpegWatchdog();
       console.error(`❌ FFmpeg spawn error: ${e.message}`);
       if (!triedFallback && /ENOENT/i.test(e.message)) {
         triedFallback = true;
