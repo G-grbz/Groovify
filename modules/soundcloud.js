@@ -365,16 +365,17 @@ function collectionTitle(meta = {}, parsed = {}) {
   return "SoundCloud Track";
 }
 
-async function fetchSoundCloudPageText(rawUrl, headers = SOUNDCLOUD_PAGE_HEADERS, timeoutMs = 20000) {
-  const parsed = new URL(rawUrl);
-  if (parsed.protocol !== "https:" || !SOUNDCLOUD_HOST_RE.test(parsed.hostname)) {
-    throw new Error("Unsupported SoundCloud page URL");
-  }
+const SOUNDCLOUD_CLIENT_ID_PAGES = Object.freeze({
+  home: "https://soundcloud.com/",
+  discover: "https://soundcloud.com/discover"
+});
 
-  // Keep the outbound host server-controlled. Only the validated SoundCloud
-  // path/query are carried forward from the caller.
-  const pathname = parsed.pathname.startsWith("/") ? parsed.pathname : `/${parsed.pathname}`;
-  const safeUrl = `https://soundcloud.com${pathname}${parsed.search}`;
+async function fetchSoundCloudPageText(pageKey = "home", headers = SOUNDCLOUD_PAGE_HEADERS, timeoutMs = 20000) {
+  const safeUrl = SOUNDCLOUD_CLIENT_ID_PAGES[pageKey];
+  if (!safeUrl) throw new Error("Unsupported SoundCloud client-id discovery page");
+
+  // Client-id discovery never carries user-controlled URL data into the
+  // outbound request. Keep both host and path selected from this fixed map.
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), timeoutMs);
   try {
@@ -400,13 +401,13 @@ export function extractSoundCloudClientId(html = "") {
   return "";
 }
 
-async function getSoundCloudClientId(pageUrl) {
+async function getSoundCloudClientId() {
   const envId = clean(process.env.SOUNDCLOUD_CLIENT_ID);
   if (envId) return envId;
 
-  for (const candidate of [pageUrl, "https://soundcloud.com/"]) {
+  for (const pageKey of ["home", "discover"]) {
     try {
-      const clientId = extractSoundCloudClientId(await fetchSoundCloudPageText(candidate));
+      const clientId = extractSoundCloudClientId(await fetchSoundCloudPageText(pageKey));
       if (clientId) return clientId;
     } catch {}
   }
@@ -449,7 +450,7 @@ export function rankSoundCloudPopularTracks(entries = []) {
 }
 
 async function resolveSoundCloudPopularTracks(url, parsed, limit) {
-  const clientId = await getSoundCloudClientId(url);
+  const clientId = await getSoundCloudClientId();
   if (!clientId) throw new Error("SoundCloud public client id could not be resolved");
 
   const profileSlug = clean(parsed.id).split("/")[0];
@@ -558,7 +559,7 @@ async function hydrateFlatEntriesWithApi(entries, url) {
   if (!incomplete.length) return new Map();
 
   try {
-    const clientId = await getSoundCloudClientId(url);
+    const clientId = await getSoundCloudClientId();
     if (!clientId) return new Map();
     return await fetchSoundCloudTracksByIds(incomplete.map((entry) => entry.id), clientId, url);
   } catch {
