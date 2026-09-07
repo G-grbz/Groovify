@@ -562,7 +562,7 @@ router.post("/api/spotify/process/start", async (req, res) => {
           jj.lastLogKey = "log.error";
           jj.lastLogVars = { err: jj.error };
           jj.lastLog = `❌ Error: ${jj.error}`;
-          console.error("[music-match/process/start bg] error:", err);
+          console.error("[music-match/process/start bg] error:", sanitizeLogValue(err?.message || err));
         }
       });
 

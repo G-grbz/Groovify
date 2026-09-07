@@ -143,7 +143,7 @@ export function deriveSoundCloudMatchIdentity({ artist = "", title = "" } = {}) 
     const titleNorm = normalizeMatchText(matchTitle);
     if (artistNorm && titleNorm.startsWith(`${artistNorm} `)) {
       const escaped = rawArtist.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-      matchTitle = matchTitle.replace(new RegExp(`^${escaped}\\s*[:\-–—]\\s*`, "i"), "").trim() || matchTitle;
+      matchTitle = matchTitle.replace(new RegExp(`^${escaped}\\s*[:–—-]\\s*`, "i"), "").trim() || matchTitle;
     }
   }
 
@@ -365,11 +365,20 @@ function collectionTitle(meta = {}, parsed = {}) {
   return "SoundCloud Track";
 }
 
-async function fetchText(url, headers = SOUNDCLOUD_PAGE_HEADERS, timeoutMs = 20000) {
+async function fetchSoundCloudPageText(rawUrl, headers = SOUNDCLOUD_PAGE_HEADERS, timeoutMs = 20000) {
+  const parsed = new URL(rawUrl);
+  if (parsed.protocol !== "https:" || !SOUNDCLOUD_HOST_RE.test(parsed.hostname)) {
+    throw new Error("Unsupported SoundCloud page URL");
+  }
+
+  // Keep the outbound host server-controlled. Only the validated SoundCloud
+  // path/query are carried forward from the caller.
+  const pathname = parsed.pathname.startsWith("/") ? parsed.pathname : `/${parsed.pathname}`;
+  const safeUrl = `https://soundcloud.com${pathname}${parsed.search}`;
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), timeoutMs);
   try {
-    const response = await fetch(url, { headers, redirect: "follow", signal: controller.signal });
+    const response = await fetch(safeUrl, { headers, redirect: "follow", signal: controller.signal });
     if (!response.ok) throw new Error(`SoundCloud metadata request failed (${response.status})`);
     return response.text();
   } finally {
@@ -397,7 +406,7 @@ async function getSoundCloudClientId(pageUrl) {
 
   for (const candidate of [pageUrl, "https://soundcloud.com/"]) {
     try {
-      const clientId = extractSoundCloudClientId(await fetchText(candidate));
+      const clientId = extractSoundCloudClientId(await fetchSoundCloudPageText(candidate));
       if (clientId) return clientId;
     } catch {}
   }

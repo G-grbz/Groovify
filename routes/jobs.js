@@ -1645,7 +1645,7 @@ router.post("/api/jobs", rateLimit(10, 60_000), upload.single("file"), async (re
       batchTotal,
     });
   } catch (error) {
-    console.error("Job creation error:", error);
+    console.error("Job creation error:", sanitizeLogValue(error?.message || error));
     return sendError(res, ERR.INTERNAL, error.message || "internal", 500);
   }
 });

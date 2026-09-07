@@ -23,9 +23,9 @@ https://github.com/user-attachments/assets/4083729e-3db9-4936-ac01-28c0f318aebe
 
 Next-generation media processing, powered by **yt-dlp**, **FFmpeg** and **deno**.
 
-Seamlessly download content from YouTube, YouTube Music, and major platforms like X, Facebook, Instagram, Vimeo, Dailymotion, and TikTok. Leverage Spotify, Apple Music, and Deezer for intelligent metadata matching and track discovery — then fetch high-quality media via yt-dlp. Includes DRM-free disc ripping, iPhone / Android ringtone output, and blazing-fast GPU-accelerated transcoding, all powered by a robust and reliable processing engine.
+Seamlessly download content from YouTube, YouTube Music, and major platforms like X, Facebook, Instagram, Vimeo, Dailymotion, and TikTok. Leverage Spotify, Apple Music, Deezer, TIDAL, and SoundCloud for intelligent metadata matching and track discovery — then fetch high-quality media via yt-dlp. Includes DRM-free disc ripping, iPhone / Android ringtone output, and blazing-fast GPU-accelerated transcoding, all powered by a robust and reliable processing engine.
 
-> **Spotify note:** Spotify is used for **metadata + matching** (track/playlist/album info). Gharmonize does **not** claim DRM bypass.
+> **Mapped-music note:** Spotify, Apple Music, Deezer, TIDAL, and SoundCloud are used as **metadata/catalog sources for matching and discovery**. Gharmonize matches supported catalog items to YouTube / YouTube Music for media retrieval and does **not** claim DRM bypass of subscription services.
 
 
 </div>
@@ -107,7 +107,9 @@ Full Docker setup, bind mounts, permissions, `MUSIC_DIR`, NVIDIA Container Toolk
 - **YouTube / YouTube Music** downloads for single items, playlists, and mixes
 - **YTLive** — a dedicated music-first UI for YouTube discovery, playback, and queueing
 - **X (Twitter) / Facebook / Instagram / Vimeo / Dailymotion / TikTok** download and conversion flows
-- **Spotify, Apple Music, and Deezer** mapping for track / playlist / album workflows, including personalized Deezer `inspired-by-*` smart tracklists
+- **Spotify, Apple Music, Deezer, TIDAL, and SoundCloud** mapped-music workflows with safer YouTube candidate ranking and duration-aware validation
+- **TIDAL** track / playlist / album mapping, including album-track URLs and paginated collections
+- **SoundCloud** tracks, sets/playlists, profile collections such as `popular-tracks`, plus supported discovery and station-style URLs
 - **Phone ringtone output** for iPhone (`.m4r`) and Android (`.mp3`)
 - **Audio and video conversion** powered by FFmpeg, with FPS/A-V sync presets for AC3 / EAC3 / AAC
 - **GPU acceleration** for local transcoding — NVENC, VAAPI, Intel QSV
